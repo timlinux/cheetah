@@ -92,16 +92,28 @@ export function deleteSession(documentHash) {
 }
 
 /**
- * Get recent sessions sorted by last accessed
+ * Get recent sessions sorted by last accessed, deduplicated by title
  * @param {number} limit - Maximum number of sessions to return
  * @returns {Array}
  */
 export function getRecentSessions(limit = 10) {
   const sessions = getSessions();
-  return Object.entries(sessions)
+  const sortedSessions = Object.entries(sessions)
     .map(([hash, data]) => ({ hash, ...data }))
-    .sort((a, b) => new Date(b.lastAccessed) - new Date(a.lastAccessed))
-    .slice(0, limit);
+    .sort((a, b) => new Date(b.lastAccessed) - new Date(a.lastAccessed));
+
+  // Deduplicate by title, keeping the most recent entry for each title
+  const seenTitles = new Set();
+  const deduplicated = sortedSessions.filter(session => {
+    const normalizedTitle = (session.title || '').toLowerCase().trim();
+    if (seenTitles.has(normalizedTitle)) {
+      return false;
+    }
+    seenTitles.add(normalizedTitle);
+    return true;
+  });
+
+  return deduplicated.slice(0, limit);
 }
 
 /**
