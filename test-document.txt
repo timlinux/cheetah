@@ -1,0 +1,17 @@
+The Art of Speed Reading
+
+Speed reading is a collection of techniques used to increase one's rate of reading without sacrificing comprehension. The most effective speed readers can process over one thousand words per minute while maintaining strong understanding of the material.
+
+One popular technique is Rapid Serial Visual Presentation, commonly known as RSVP. This method displays words one at a time in a fixed location on the screen. By eliminating the need for eye movement across lines of text, readers can focus entirely on word recognition and comprehension.
+
+The human brain is remarkably capable of processing visual information quickly. Traditional reading involves a series of eye movements called saccades, where the eyes jump from one fixation point to another. Each saccade takes time, and the brain must constantly adjust to new positions on the page.
+
+RSVP eliminates these inefficiencies. When words appear in the same location, the eyes remain still and the brain can dedicate all its processing power to understanding the text. Many readers report that after initial adjustment, RSVP feels natural and even relaxing.
+
+Starting with a comfortable speed of around three hundred words per minute is recommended. As you become more familiar with the technique, gradually increase your speed. Some readers eventually reach speeds of eight hundred or even one thousand words per minute.
+
+Practice is essential for improvement. Regular sessions of fifteen to twenty minutes work well for most people. Over time, your brain will adapt to processing information more quickly, and you may find that your traditional reading speed improves as well.
+
+The key to successful speed reading is finding the right balance between speed and comprehension. Reading faster than you can understand defeats the purpose. Pay attention to how well you retain information and adjust your speed accordingly.
+
+Welcome to Cheetah, your personal speed reading trainer. Press space to pause and resume. Use the j and k keys to adjust your reading speed. Happy reading!

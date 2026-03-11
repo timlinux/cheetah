@@ -1,0 +1,48 @@
+# Binary
+cheetah
+cheetah.exe
+
+# Build artifacts
+result
+dist/
+*.deb
+*.rpm
+*.AppImage
+
+# Go
+vendor/
+
+# Node.js
+node_modules/
+web/node_modules/
+web/dist/
+
+# Hugo
+hugo/public/
+hugo/resources/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage.out
+coverage.html
+
+# Logs
+*.log
+PROMPT.log
+
+# Config (runtime)
+.env
+.env.local
+PROMPT.log
+test-document.txt
+hugo/.hugo_build.lock

@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza
+# SPDX-License-Identifier: MIT
+
+baseURL = "/"
+languageCode = "en-us"
+title = "Cheetah Documentation"
+theme = "cheetah"
+
+[params]
+  description = "RSVP Speed Reading Application"
+  author = "Tim Sutton / Kartoza"
+  appUrl = "/"
+
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Getting Started"
+    url = "/getting-started/"
+    weight = 2
+  [[menu.main]]
+    name = "User Guide"
+    url = "/user-guide/"
+    weight = 3
+  [[menu.main]]
+    name = "API Reference"
+    url = "/api/"
+    weight = 4
+  [[menu.main]]
+    name = "Contributing"
+    url = "/contributing/"
+    weight = 5
+  [[menu.main]]
+    name = "GitHub"
+    url = "https://github.com/timlinux/cheetah"
+    weight = 100
+    [menu.main.params]
+      external = true
+      class = "github-link"
+
+[markup]
+  [markup.highlight]
+    style = "monokai"
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true

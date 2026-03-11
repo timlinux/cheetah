@@ -1,0 +1,24 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Cheetah
+Upstream-Contact: Tim Sutton <tim@kartoza.com>
+Source: https://github.com/timlinux/cheetah
+
+# Documentation and configuration files
+Files: *.md *.json *.yaml *.yml *.toml .gitignore .editorconfig
+Copyright: 2026 Tim Sutton / Kartoza
+License: MIT
+
+# Test fixtures and sample documents
+Files: test-document.txt tests/fixtures/*
+Copyright: 2026 Tim Sutton / Kartoza
+License: MIT
+
+# Generated files
+Files: go.sum package-lock.json
+Copyright: 2026 Tim Sutton / Kartoza
+License: MIT
+
+# Hugo documentation
+Files: hugo/*
+Copyright: 2026 Tim Sutton / Kartoza
+License: MIT

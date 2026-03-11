@@ -1,0 +1,49 @@
+{
+  "name": "cheetah-web",
+  "version": "0.1.0",
+  "description": "Cheetah RSVP Speed Reading - Web Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .js,.jsx",
+    "format": "prettier --write src",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.10.0",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "framer-motion": "^11.15.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-dropzone": "^14.3.0",
+    "pdfjs-dist": "^4.0.0",
+    "mammoth": "^1.8.0",
+    "epubjs": "^0.3.0",
+    "jszip": "^3.10.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.0",
+    "prettier": "^3.3.0",
+    "vite": "^6.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timlinux/cheetah.git"
+  },
+  "keywords": [
+    "rsvp",
+    "speed-reading",
+    "reader",
+    "ebook"
+  ],
+  "author": "Tim Sutton <tim@kartoza.com>",
+  "license": "MIT"
+}
