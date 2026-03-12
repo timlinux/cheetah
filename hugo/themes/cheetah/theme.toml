@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza
+# SPDX-License-Identifier: MIT
+
+name = "Cheetah"
+license = "MIT"
+licenselink = "https://github.com/timlinux/cheetah/blob/main/LICENSE"
+description = "Documentation theme for Cheetah RSVP Speed Reading"
+homepage = "https://github.com/timlinux/cheetah"
+tags = ["documentation", "minimal", "dark"]
+features = ["dark mode", "responsive"]
+min_version = "0.112.0"
+
+[author]
+  name = "Tim Sutton / Kartoza"
+  homepage = "https://kartoza.com"

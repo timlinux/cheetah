@@ -1,0 +1,50 @@
+{{/* SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza */}}
+{{/* SPDX-License-Identifier: MIT */}}
+<!DOCTYPE html>
+<html lang="{{ .Site.Language.Lang }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | {{ .Site.Title }}</title>
+    <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ .Site.Params.description }}{{ end }}">
+    <link rel="stylesheet" href="{{ "css/style.css" | relURL }}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <div class="header-content">
+                <a href="{{ "/" | relURL }}" class="logo">
+                    <span class="logo-icon">🐆</span>
+                    <span class="logo-text">Cheetah Docs</span>
+                </a>
+                <nav class="main-nav">
+                    {{ range .Site.Menus.main }}
+                        {{ if .Params.external }}
+                            <a href="{{ .URL }}" target="_blank" rel="noopener">{{ .Name }} ↗</a>
+                        {{ else }}
+                            <a href="{{ .URL | relURL }}">{{ .Name }}</a>
+                        {{ end }}
+                    {{ end }}
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="site-main">
+        <div class="container">
+            {{ block "main" . }}{{ end }}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>
+                Made with ❤️ by <a href="https://kartoza.com">Kartoza</a> |
+                <a href="https://github.com/sponsors/timlinux">Donate!</a> |
+                <a href="https://github.com/timlinux/cheetah">GitHub</a> |
+                <a href="https://github.com/timlinux/cheetah/releases">Download</a>
+            </p>
+        </div>
+    </footer>
+</body>
+</html>

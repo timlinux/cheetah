@@ -1,0 +1,31 @@
+{{/* SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza */}}
+{{/* SPDX-License-Identifier: MIT */}}
+{{ define "main" }}
+<article class="content home">
+    <div class="hero">
+        <h1>🐆 Cheetah Documentation</h1>
+        <p class="tagline">RSVP Speed Reading Application</p>
+        <a href="{{ "/" | relURL }}" class="cta-button">← Back to App</a>
+    </div>
+
+    {{ .Content }}
+
+    <div class="features">
+        <div class="feature">
+            <h3>⚡ Getting Started</h3>
+            <p>Learn how to install and use Cheetah to read at up to 1000+ WPM.</p>
+            <a href="{{ "getting-started/" | relURL }}">Read more →</a>
+        </div>
+        <div class="feature">
+            <h3>📖 User Guide</h3>
+            <p>Complete guide to all features, keyboard shortcuts, and settings.</p>
+            <a href="{{ "user-guide/" | relURL }}">Read more →</a>
+        </div>
+        <div class="feature">
+            <h3>🔧 API Reference</h3>
+            <p>Technical documentation for developers and integrators.</p>
+            <a href="{{ "api/" | relURL }}">Read more →</a>
+        </div>
+    </div>
+</article>
+{{ end }}

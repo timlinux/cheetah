@@ -1,0 +1,17 @@
+{{/* SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza */}}
+{{/* SPDX-License-Identifier: MIT */}}
+{{ define "main" }}
+<article class="content">
+    <h1>{{ .Title }}</h1>
+    {{ .Content }}
+
+    <ul class="page-list">
+    {{ range .Pages }}
+        <li>
+            <a href="{{ .Permalink }}">{{ .Title }}</a>
+            {{ if .Description }}<p>{{ .Description }}</p>{{ end }}
+        </li>
+    {{ end }}
+    </ul>
+</article>
+{{ end }}
