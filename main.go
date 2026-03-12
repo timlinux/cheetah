@@ -3,23 +3,20 @@
 
 // Cheetah - RSVP Speed Reading Application
 //
-// This is the entry point that starts the REST API server (backend)
-// and connects the terminal UI (frontend) to it via HTTP.
+// This is the entry point for the RSVP speed reading application.
+//
+// By default, the TUI runs as a standalone application with an embedded
+// reading engine (no HTTP server required). For web mode, use the 'web'
+// subcommand which starts an HTTP server.
 //
 // RSVP (Rapid Serial Visual Presentation) displays words one at a time
 // in a fixed location, allowing users to read at speeds up to 1000+ WPM.
-//
-// Architecture:
-//   - Backend: REST API server handling document parsing and reading state
-//   - Frontend: Bubble Tea TUI communicating via REST client
 //
 // Usage:
 //
 //	cheetah                     # Opens file picker to select a document
 //	cheetah /path/to/book.pdf   # Opens document directly
-//	cheetah -port 8787          # Use custom port for REST API
-//	cheetah -server             # Run backend server only (blocking)
-//	cheetah -client             # Run frontend only (connect to existing backend)
+//	cheetah web -port 8787      # Start web server with API
 package main
 
 import (
@@ -31,14 +28,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/timlinux/cheetah/backend"
 	"github.com/timlinux/cheetah/frontend"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 func main() {
 	// Check for subcommands first
@@ -47,21 +43,27 @@ func main() {
 		case "web":
 			runWebCommand(os.Args[2:])
 			return
+		case "server":
+			runServerCommand(os.Args[2:])
+			return
 		case "version":
 			fmt.Printf("Cheetah v%s\n", Version)
+			return
+		case "help", "-h", "--help":
+			printHelp()
 			return
 		}
 	}
 
-	// Parse command line flags
-	port := flag.Int("port", 8787, "Port for the REST API server")
-	serverOnly := flag.Bool("server", false, "Run backend server only (no TUI)")
-	clientOnly := flag.Bool("client", false, "Run frontend only (connect to existing backend)")
+	// Parse command line flags for TUI mode
 	wpm := flag.Int("wpm", 300, "Initial words per minute speed")
+	showVersion := flag.Bool("version", false, "Show version and exit")
 	flag.Parse()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	baseURL := fmt.Sprintf("http://%s", addr)
+	if *showVersion {
+		fmt.Printf("Cheetah v%s\n", Version)
+		return
+	}
 
 	// Get document path from remaining args
 	var documentPath string
@@ -69,26 +71,39 @@ func main() {
 		documentPath = flag.Arg(0)
 	}
 
-	// Validate flags
-	if *serverOnly && *clientOnly {
-		fmt.Println("Error: cannot use both -server and -client flags")
+	// Run TUI with embedded engine (standalone mode - no HTTP server)
+	runStandaloneTUI(documentPath, *wpm)
+}
+
+// runStandaloneTUI runs the TUI with an embedded engine (no HTTP server needed).
+func runStandaloneTUI(documentPath string, wpm int) {
+	// Create and run TUI with embedded engine
+	model := frontend.NewModel(documentPath, wpm)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error running program: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runServerCommand handles the 'server' subcommand for running API server only.
+func runServerCommand(args []string) {
+	serverFlags := flag.NewFlagSet("server", flag.ExitOnError)
+	port := serverFlags.Int("port", 8787, "Port for the REST API server")
+
+	serverFlags.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: cheetah server [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Run the backend REST API server only.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		serverFlags.PrintDefaults()
+	}
+
+	if err := serverFlags.Parse(args); err != nil {
 		os.Exit(1)
 	}
 
-	// Server-only mode: run backend and block
-	if *serverOnly {
-		runServerOnly(addr)
-		return
-	}
-
-	// Client-only mode: connect to existing backend
-	if *clientOnly {
-		runClientOnly(baseURL, documentPath, *wpm)
-		return
-	}
-
-	// Default mode: start backend and frontend together
-	runCombined(addr, baseURL, documentPath, *wpm)
+	addr := fmt.Sprintf("127.0.0.1:%d", *port)
+	runServerOnly(addr)
 }
 
 // runServerOnly starts the backend server and blocks until interrupted.
@@ -119,77 +134,12 @@ func runServerOnly(addr string) {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("Cheetah backend server starting on %s\n", addr)
-	fmt.Printf("PID: %d (written to %s)\n", os.Getpid(), pidFile)
-	fmt.Println("Press Ctrl+C to stop")
+	fmt.Printf("🐆 Cheetah API server starting on %s\n", addr)
+	fmt.Printf("   PID: %d (written to %s)\n", os.Getpid(), pidFile)
+	fmt.Println("   Press Ctrl+C to stop")
 
 	if err := server.Start(); err != nil {
 		fmt.Printf("Server error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// runClientOnly connects to an existing backend server.
-func runClientOnly(baseURL, documentPath string, wpm int) {
-	client := frontend.NewClient(baseURL)
-
-	// Wait for server to be ready
-	fmt.Printf("Connecting to backend at %s...\n", baseURL)
-	if err := client.WaitForServer(5 * time.Second); err != nil {
-		fmt.Printf("Error: Could not connect to backend: %v\n", err)
-		fmt.Println("Make sure the backend is running with: cheetah -server")
-		os.Exit(1)
-	}
-
-	// Create a session on the server
-	if err := client.CreateSession(); err != nil {
-		fmt.Printf("Error creating session: %v\n", err)
-		os.Exit(1)
-	}
-	defer client.DeleteSession()
-
-	// Create and run TUI
-	model := frontend.NewModel(client, documentPath, wpm)
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running program: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// runCombined starts both backend and frontend together (default mode).
-func runCombined(addr, baseURL, documentPath string, wpm int) {
-	config := backend.DefaultConfig()
-
-	server, err := backend.NewServer(config, addr)
-	if err != nil {
-		fmt.Printf("Error creating server: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Start server in background
-	server.StartAsync()
-
-	client := frontend.NewClient(baseURL)
-
-	// Wait for server to be ready
-	if err := client.WaitForServer(2 * time.Second); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Create a session on the server
-	if err := client.CreateSession(); err != nil {
-		fmt.Printf("Error creating session: %v\n", err)
-		os.Exit(1)
-	}
-	defer client.DeleteSession()
-
-	// Create and run TUI
-	model := frontend.NewModel(client, documentPath, wpm)
-	p := tea.NewProgram(model, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running program: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -256,6 +206,38 @@ func runWebCommand(args []string) {
 		fmt.Printf("Server error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// printHelp prints usage information.
+func printHelp() {
+	fmt.Println("🐆 Cheetah - RSVP Speed Reading Application")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  cheetah                     Open file picker (standalone TUI)")
+	fmt.Println("  cheetah <file>              Open document directly")
+	fmt.Println("  cheetah web [options]       Start web server with API")
+	fmt.Println("  cheetah server [options]    Start API server only")
+	fmt.Println("  cheetah version             Show version")
+	fmt.Println("  cheetah help                Show this help")
+	fmt.Println()
+	fmt.Println("TUI Options:")
+	fmt.Println("  -wpm int       Initial reading speed (default 300)")
+	fmt.Println()
+	fmt.Println("Web Options:")
+	fmt.Println("  -port int      Port for web server (default 8787)")
+	fmt.Println("  -dir string    Directory for web frontend (default web/dist)")
+	fmt.Println()
+	fmt.Println("Keyboard Controls (TUI):")
+	fmt.Println("  Space          Pause/resume reading")
+	fmt.Println("  j/k            Decrease/increase speed")
+	fmt.Println("  h/l            Previous/next paragraph")
+	fmt.Println("  1-9            Speed presets (200-1000 WPM)")
+	fmt.Println("  r              Return to start")
+	fmt.Println("  s              Save position")
+	fmt.Println("  Esc            Return to file picker")
+	fmt.Println("  q              Quit")
+	fmt.Println()
+	fmt.Println("Made with ❤️ by Kartoza | https://kartoza.com")
 }
 
 // getPIDFilePath returns the path to the PID file.

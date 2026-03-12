@@ -30,10 +30,15 @@ type animTickMsg time.Time
 // stateUpdateMsg is sent when the backend state changes
 type stateUpdateMsg backend.ReadingState
 
+// documentLoadedMsg is sent when a document finishes loading
+type documentLoadedMsg struct {
+	err error
+}
+
 // Model is the Bubble Tea model for the reading application
 type Model struct {
-	// API client
-	client *Client
+	// Engine adapter (embedded or HTTP client)
+	engine EngineAdapter
 
 	// UI state
 	state    AppState
@@ -62,8 +67,11 @@ type Model struct {
 	settingsCursor int
 }
 
-// NewModel creates a new Model with the given client
-func NewModel(client *Client, documentPath string, initialWPM int) Model {
+// NewModel creates a new Model with the embedded engine (standalone mode)
+func NewModel(documentPath string, initialWPM int) Model {
+	// Create embedded engine (no HTTP needed)
+	engine := NewEmbeddedEngine()
+
 	// Initialize custom file browser
 	fb := NewFileBrowser()
 
@@ -74,7 +82,28 @@ func NewModel(client *Client, documentPath string, initialWPM int) Model {
 	}
 
 	return Model{
-		client:       client,
+		engine:       engine,
+		state:        initialState,
+		renderer:     NewRenderer(80, 24),
+		animator:     NewWordAnimator(),
+		fileBrowser:  fb,
+		initialPath:  documentPath,
+		initialWPM:   initialWPM,
+		readingState: &backend.ReadingState{IsPaused: true, WPM: initialWPM},
+	}
+}
+
+// NewModelWithEngine creates a model with a custom engine adapter
+func NewModelWithEngine(engine EngineAdapter, documentPath string, initialWPM int) Model {
+	fb := NewFileBrowser()
+
+	initialState := StateFilePicker
+	if documentPath != "" {
+		initialState = StateReading
+	}
+
+	return Model{
+		engine:       engine,
 		state:        initialState,
 		renderer:     NewRenderer(80, 24),
 		animator:     NewWordAnimator(),
@@ -103,10 +132,24 @@ func (m Model) Init() tea.Cmd {
 // Update handles messages and updates the model state
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case documentLoadedMsg:
+		m.documentLoading = false
+		if msg.err != nil {
+			m.loadError = msg.err.Error()
+		} else {
+			m.loadError = ""
+			m.state = StateReading
+			// Set initial WPM
+			if m.initialWPM > 0 {
+				m.engine.SetWPM(m.initialWPM)
+			}
+		}
+		return m, nil
+
 	case tickMsg:
-		// Poll backend state
-		if m.state == StateReading && m.client != nil {
-			state, err := m.client.GetState()
+		// Poll engine state directly
+		if m.state == StateReading && m.engine != nil {
+			state, err := m.engine.GetState()
 			if err == nil && state != nil {
 				// Check if word changed for animation
 				if state.WordIndex != m.lastWordIndex && !state.IsPaused {
@@ -230,18 +273,19 @@ func (m Model) handleFilePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.fileBrowser.MoveUp()
 		return m, nil
 
-	case tea.KeyDown, tea.KeyTab:
-		// Tab switches to resume list if we have saved sessions
-		if msg.Type == tea.KeyTab {
-			sessions, _ := m.client.GetSavedSessions()
-			if len(sessions) > 0 {
-				m.savedSessions = sessions
-				m.resumeCursor = 0
-				m.state = StateResumeList
-				return m, nil
-			}
-		}
+	case tea.KeyDown:
 		m.fileBrowser.MoveDown()
+		return m, nil
+
+	case tea.KeyTab:
+		// Tab switches to resume list if we have saved sessions
+		sessions, _ := m.engine.GetSavedSessions()
+		if len(sessions) > 0 {
+			m.savedSessions = sessions
+			m.resumeCursor = 0
+			m.state = StateResumeList
+			return m, nil
+		}
 		return m, nil
 
 	case tea.KeyPgUp:
@@ -264,6 +308,8 @@ func (m Model) handleFilePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.fileBrowser.Enter() {
 			// File was selected
 			m.selectedFile = m.fileBrowser.SelectedFile
+			m.documentLoading = true
+			m.state = StateReading
 			return m, m.loadDocumentCmd(m.selectedFile)
 		}
 		return m, nil
@@ -286,6 +332,8 @@ func (m Model) handleFilePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "l":
 			if m.fileBrowser.Enter() {
 				m.selectedFile = m.fileBrowser.SelectedFile
+				m.documentLoading = true
+				m.state = StateReading
 				return m, m.loadDocumentCmd(m.selectedFile)
 			}
 		case "g":
@@ -306,7 +354,6 @@ func (m Model) handleFilePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-
 
 // handleResumeListInput processes keyboard input in resume list
 func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -332,6 +379,8 @@ func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		if m.resumeCursor < len(m.savedSessions) {
 			session := m.savedSessions[m.resumeCursor]
+			m.documentLoading = true
+			m.state = StateReading
 			return m, m.resumeSessionCmd(session.DocumentHash)
 		}
 
@@ -364,22 +413,22 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyEsc:
 		// Save position and return to file picker
-		m.client.SavePosition()
-		m.client.Pause()
+		m.engine.SavePosition()
+		m.engine.Pause()
 		m.state = StateFilePicker
 		m.loadError = ""
 		return m, nil
 
 	case tea.KeySpace:
 		// Toggle play/pause
-		m.client.Toggle()
+		m.engine.Toggle()
 		return m, nil
 
 	case tea.KeyRunes:
 		char := string(msg.Runes)
 		switch char {
 		case "q":
-			m.client.SavePosition()
+			m.engine.SavePosition()
 			return m, tea.Quit
 
 		case "j", "J":
@@ -389,7 +438,7 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if newWPM < 50 {
 					newWPM = 50
 				}
-				m.client.SetWPM(newWPM)
+				m.engine.SetWPM(newWPM)
 			}
 
 		case "k", "K":
@@ -399,31 +448,31 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if newWPM > 2000 {
 					newWPM = 2000
 				}
-				m.client.SetWPM(newWPM)
+				m.engine.SetWPM(newWPM)
 			}
 
 		case "h", "H":
 			// Previous paragraph
-			m.client.PrevParagraph()
+			m.engine.PrevParagraph()
 
 		case "l", "L":
 			// Next paragraph
-			m.client.NextParagraph()
+			m.engine.NextParagraph()
 
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			// Speed presets
 			preset := int(msg.Runes[0] - '0')
 			wpm := 100 + (preset * 100) // 1=200, 2=300, ..., 9=1000
-			m.client.SetWPM(wpm)
+			m.engine.SetWPM(wpm)
 
 		case "s", "S":
 			// Save position
-			m.client.SavePosition()
+			m.engine.SavePosition()
 
 		case "r", "R":
 			// Return to start
-			m.client.ReturnToStart()
-			m.client.Pause()
+			m.engine.ReturnToStart()
+			m.engine.Pause()
 		}
 
 	case tea.KeyLeft:
@@ -433,7 +482,7 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if newWPM < 50 {
 				newWPM = 50
 			}
-			m.client.SetWPM(newWPM)
+			m.engine.SetWPM(newWPM)
 		}
 
 	case tea.KeyRight:
@@ -443,16 +492,16 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if newWPM > 2000 {
 				newWPM = 2000
 			}
-			m.client.SetWPM(newWPM)
+			m.engine.SetWPM(newWPM)
 		}
 
 	case tea.KeyUp:
 		// Previous paragraph
-		m.client.PrevParagraph()
+		m.engine.PrevParagraph()
 
 	case tea.KeyDown:
 		// Next paragraph
-		m.client.NextParagraph()
+		m.engine.NextParagraph()
 	}
 
 	return m, nil
@@ -473,41 +522,20 @@ func (m Model) handleSettingsInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // loadDocumentCmd returns a command to load a document
-func (m Model) loadDocumentCmd(path string) tea.Cmd {
+func (m *Model) loadDocumentCmd(path string) tea.Cmd {
+	engine := m.engine
 	return func() tea.Msg {
-		m.documentLoading = true
-
-		if err := m.client.LoadDocument(path); err != nil {
-			m.loadError = err.Error()
-			m.documentLoading = false
-			return nil
-		}
-
-		// Set initial WPM
-		if m.initialWPM > 0 {
-			m.client.SetWPM(m.initialWPM)
-		}
-
-		m.documentLoading = false
-		m.state = StateReading
-		return nil
+		err := engine.LoadDocument(path)
+		return documentLoadedMsg{err: err}
 	}
 }
 
 // resumeSessionCmd returns a command to resume a saved session
-func (m Model) resumeSessionCmd(hash string) tea.Cmd {
+func (m *Model) resumeSessionCmd(hash string) tea.Cmd {
+	engine := m.engine
 	return func() tea.Msg {
-		m.documentLoading = true
-
-		if err := m.client.ResumeSession(hash); err != nil {
-			m.loadError = err.Error()
-			m.documentLoading = false
-			return nil
-		}
-
-		m.documentLoading = false
-		m.state = StateReading
-		return nil
+		err := engine.ResumeSession(hash)
+		return documentLoadedMsg{err: err}
 	}
 }
 
