@@ -55,9 +55,9 @@
         packages = {
           default = pkgs.buildGoModule {
             pname = "cheetah";
-            version = "0.1.0";
+            version = "0.3.0";
             src = ./.;
-            vendorHash = null;
+            vendorHash = "sha256-6xoFDUOvYBku2t+O+8U9cSlyk9nkpNiaKw4aJ2HXsw8=";
 
             meta = with pkgs.lib; {
               description = "RSVP Speed Reading Application - read at 1000+ WPM";
