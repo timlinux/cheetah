@@ -1,0 +1,263 @@
+# SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza
+# SPDX-License-Identifier: MIT
+
+version: 2
+
+project_name: cheetah
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cheetah
+    binary: cheetah
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - SPECIFICATION.md
+
+# Linux packages
+nfpms:
+  - id: packages
+    package_name: cheetah
+    vendor: Kartoza
+    homepage: https://github.com/timlinux/cheetah
+    maintainer: Tim Sutton <tim@kartoza.com>
+    description: |
+      RSVP Speed Reading Application
+      Read documents at speeds up to 1000+ WPM with Rapid Serial Visual Presentation.
+      Supports PDF, DOCX, EPUB, ODT, TXT, and Markdown files.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+      - archlinux
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    contents:
+      - src: ./README.md
+        dst: /usr/share/doc/cheetah/README.md
+      - src: ./LICENSE
+        dst: /usr/share/doc/cheetah/LICENSE
+    deb:
+      lintian_overrides:
+        - statically-linked-binary
+    rpm:
+      group: Applications/Text
+    archlinux:
+      pkgbase: cheetah
+      packager: Tim Sutton <tim@kartoza.com>
+
+# Snapcraft
+snapcrafts:
+  - id: snap
+    name: cheetah
+    publish: false
+    summary: RSVP Speed Reading Application
+    description: |
+      Read documents at speeds up to 1000+ WPM with Rapid Serial Visual Presentation.
+
+      Features:
+      - Beautiful TUI with large block-letter word display
+      - Web interface with drag-drop document support
+      - Supports PDF, DOCX, EPUB, ODT, TXT, Markdown
+      - Smart pacing with punctuation-aware delays
+      - Session persistence - resume where you left off
+      - Interactive scrubber for navigation
+
+      Made with love by Kartoza - https://kartoza.com
+    grade: stable
+    confinement: strict
+    license: MIT
+    base: core22
+    apps:
+      cheetah:
+        command: cheetah
+        plugs:
+          - home
+          - network
+          - network-bind
+
+# Homebrew formula
+brews:
+  - name: cheetah
+    repository:
+      owner: timlinux
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: auto
+    directory: Formula
+    homepage: https://github.com/timlinux/cheetah
+    description: RSVP Speed Reading Application - Read at 1000+ WPM
+    license: MIT
+    install: |
+      bin.install "cheetah"
+    test: |
+      system "#{bin}/cheetah", "version"
+
+# AUR package
+aurs:
+  - name: cheetah-bin
+    homepage: https://github.com/timlinux/cheetah
+    description: RSVP Speed Reading Application - Read at 1000+ WPM
+    maintainers:
+      - Tim Sutton <tim@kartoza.com>
+    license: MIT
+    private_key: '{{ .Env.AUR_SSH_PRIVATE_KEY }}'
+    git_url: 'ssh://aur@aur.archlinux.org/cheetah-bin.git'
+    skip_upload: auto
+    package: |-
+      install -Dm755 cheetah "${pkgdir}/usr/bin/cheetah"
+      install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/cheetah/LICENSE"
+      install -Dm644 README.md "${pkgdir}/usr/share/doc/cheetah/README.md"
+
+# Docker images
+dockers:
+  - image_templates:
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-amd64"
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+    dockerfile: Dockerfile
+    skip_push: auto
+  - image_templates:
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-arm64"
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+    dockerfile: Dockerfile
+    skip_push: auto
+
+docker_manifests:
+  - name_template: "ghcr.io/timlinux/cheetah:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-amd64"
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-arm64"
+    skip_push: auto
+  - name_template: "ghcr.io/timlinux/cheetah:latest"
+    image_templates:
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-amd64"
+      - "ghcr.io/timlinux/cheetah:{{ .Version }}-arm64"
+    skip_push: auto
+
+# Checksum
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+# Changelog
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+
+# Release
+release:
+  github:
+    owner: timlinux
+    name: cheetah
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## 🐆 Cheetah {{ .Version }}
+
+    **RSVP Speed Reading Application** - Read at speeds up to 1000+ WPM!
+
+  footer: |
+
+    ---
+
+    ### 📦 Package Installation
+
+    **Debian/Ubuntu:**
+    ```bash
+    sudo dpkg -i cheetah_{{ .Version }}_linux_amd64.deb
+    ```
+
+    **Fedora/RHEL:**
+    ```bash
+    sudo rpm -i cheetah_{{ .Version }}_linux_amd64.rpm
+    ```
+
+    **Arch Linux (AUR):**
+    ```bash
+    yay -S cheetah-bin
+    ```
+
+    **macOS (Homebrew):**
+    ```bash
+    brew install timlinux/tap/cheetah
+    ```
+
+    **Snap:**
+    ```bash
+    sudo snap install cheetah
+    ```
+
+    **Docker:**
+    ```bash
+    docker run -it ghcr.io/timlinux/cheetah:{{ .Version }}
+    ```
+
+    **Binary (Linux/macOS):**
+    ```bash
+    chmod +x cheetah_{{ .Version }}_linux_amd64.tar.gz
+    tar -xzf cheetah_{{ .Version }}_linux_amd64.tar.gz
+    sudo mv cheetah /usr/local/bin/
+    ```
+
+    ---
+    Made with ❤️ by [Kartoza](https://kartoza.com) | [Donate](https://github.com/sponsors/timlinux)

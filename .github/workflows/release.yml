@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Tim Sutton / Kartoza
+# SPDX-License-Identifier: MIT
+
 name: Release
 
 on:
@@ -7,80 +10,336 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  release:
-    name: Create Release
+  goreleaser:
+    name: GoReleaser
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Generate Release Notes
-        id: release_notes
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Snapcraft
         run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          sudo snap install snapcraft --classic
 
-          # Generate changelog
-          if [ -n "$PREV_TAG" ]; then
-            CHANGES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
-          else
-            CHANGES=$(git log --pretty=format:"- %s" --no-merges -20)
-          fi
-
-          # Escape for GitHub Actions
-          CHANGES="${CHANGES//'%'/'%25'}"
-          CHANGES="${CHANGES//$'\n'/'%0A'}"
-          CHANGES="${CHANGES//$'\r'/'%0D'}"
-
-          echo "changes=$CHANGES" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: for Homebrew tap (create PAT with repo scope)
+          # HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Optional: for AUR publishing
+          # AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+  # Build AppImage separately (not supported by goreleaser)
+  appimage:
+    name: Build AppImage
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          tag_name: ${{ github.ref }}
-          release_name: 🐆 Cheetah ${{ github.ref_name }}
+          go-version: '1.22'
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o cheetah .
+
+      - name: Create AppImage structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp cheetah AppDir/usr/bin/
+
+          # Create desktop file
+          cat > AppDir/usr/share/applications/cheetah.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Cheetah
+          Comment=RSVP Speed Reading Application
+          Exec=cheetah
+          Icon=cheetah
+          Type=Application
+          Categories=Utility;TextTools;
+          Terminal=true
+          EOF
+
+          # Create simple icon (cheetah emoji as placeholder)
+          cat > AppDir/usr/share/icons/hicolor/256x256/apps/cheetah.svg << 'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            <text y=".9em" font-size="90">🐆</text>
+          </svg>
+          EOF
+
+          # Create AppRun
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          exec "${HERE}/usr/bin/cheetah" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          # Link desktop and icon to root
+          ln -s usr/share/applications/cheetah.desktop AppDir/
+          ln -s usr/share/icons/hicolor/256x256/apps/cheetah.svg AppDir/
+
+      - name: Download appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir cheetah-${{ github.ref_name }}-x86_64.AppImage
+
+      - name: Upload AppImage to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cheetah-${{ github.ref_name }}-x86_64.AppImage
+
+  # Build Flatpak separately
+  flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-23.08
+      options: --privileged
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create Flatpak manifest
+        run: |
+          cat > com.kartoza.Cheetah.yml << 'EOF'
+          app-id: com.kartoza.Cheetah
+          runtime: org.freedesktop.Platform
+          runtime-version: '23.08'
+          sdk: org.freedesktop.Sdk
+          sdk-extensions:
+            - org.freedesktop.Sdk.Extension.golang
+          command: cheetah
+          finish-args:
+            - --share=network
+            - --filesystem=home:ro
+          build-options:
+            env:
+              GOROOT: /usr/lib/sdk/golang
+          modules:
+            - name: cheetah
+              buildsystem: simple
+              build-commands:
+                - |
+                  export PATH="$GOROOT/bin:$PATH"
+                  export GOPATH="$PWD/go"
+                  go build -ldflags="-s -w" -o cheetah .
+                  install -Dm755 cheetah /app/bin/cheetah
+              sources:
+                - type: dir
+                  path: .
+          EOF
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: cheetah-${{ github.ref_name }}.flatpak
+          manifest-path: com.kartoza.Cheetah.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cheetah-${{ github.ref_name }}.flatpak
+
+  # Build Nix package
+  nix:
+    name: Build Nix Package
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Build with Nix
+        run: |
+          nix build .#default --print-out-paths > nix-result.txt
+          RESULT=$(cat nix-result.txt)
+          cp -L "$RESULT/bin/cheetah" cheetah-${{ github.ref_name }}-nix-x86_64
+
+      - name: Upload Nix binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cheetah-${{ github.ref_name }}-nix-x86_64
+
+  # Update release notes with all package info
+  update-release:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    needs: [goreleaser, appimage, flatpak, nix]
+    steps:
+      - name: Update Release Body
+        uses: softprops/action-gh-release@v2
+        with:
           body: |
             ## 🐆 Cheetah ${{ github.ref_name }}
 
             **RSVP Speed Reading Application** - Read at speeds up to 1000+ WPM!
 
-            ### ✨ What's New
-
-            ${{ steps.release_notes.outputs.changes }}
-
             ### 📦 Downloads
 
+            #### Binaries
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | 🐧 Linux | x86_64 | `cheetah-linux-amd64` |
-            | 🐧 Linux | ARM64 | `cheetah-linux-arm64` |
-            | 🍎 macOS | Intel | `cheetah-darwin-amd64` |
-            | 🍎 macOS | Apple Silicon | `cheetah-darwin-arm64` |
-            | 🪟 Windows | x86_64 | `cheetah-windows-amd64.exe` |
-            | 🪟 Windows | ARM64 | `cheetah-windows-arm64.exe` |
+            | 🐧 Linux | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.tar.gz` |
+            | 🐧 Linux | ARM64 | `cheetah_${{ github.ref_name }}_linux_arm64.tar.gz` |
+            | 🍎 macOS | Intel | `cheetah_${{ github.ref_name }}_darwin_amd64.tar.gz` |
+            | 🍎 macOS | Apple Silicon | `cheetah_${{ github.ref_name }}_darwin_arm64.tar.gz` |
+            | 🪟 Windows | x86_64 | `cheetah_${{ github.ref_name }}_windows_amd64.zip` |
+            | 🪟 Windows | ARM64 | `cheetah_${{ github.ref_name }}_windows_arm64.zip` |
 
-            ### 🚀 Quick Start
+            #### Linux Packages
+            | Format | Architecture | Download |
+            |--------|--------------|----------|
+            | DEB (Debian/Ubuntu) | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.deb` |
+            | DEB (Debian/Ubuntu) | ARM64 | `cheetah_${{ github.ref_name }}_linux_arm64.deb` |
+            | RPM (Fedora/RHEL) | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.rpm` |
+            | RPM (Fedora/RHEL) | ARM64 | `cheetah_${{ github.ref_name }}_linux_arm64.rpm` |
+            | APK (Alpine) | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.apk` |
+            | Arch Linux | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.pkg.tar.zst` |
+            | AppImage | x86_64 | `cheetah-${{ github.ref_name }}-x86_64.AppImage` |
+            | Flatpak | x86_64 | `cheetah-${{ github.ref_name }}.flatpak` |
+            | Snap | x86_64 | `cheetah_${{ github.ref_name }}_linux_amd64.snap` |
+            | Nix | x86_64 | `cheetah-${{ github.ref_name }}-nix-x86_64` |
+
+            ### 🚀 Installation
+
+            <details>
+            <summary><b>Debian/Ubuntu</b></summary>
 
             ```bash
-            # Linux/macOS - Download and install
-            chmod +x cheetah-*
-            sudo mv cheetah-* /usr/local/bin/cheetah
-
-            # Run TUI mode
-            cheetah ~/Documents/book.pdf
-
-            # Run Web mode
-            cheetah web -port 8787
+            sudo dpkg -i cheetah_${{ github.ref_name }}_linux_amd64.deb
             ```
+            </details>
+
+            <details>
+            <summary><b>Fedora/RHEL</b></summary>
+
+            ```bash
+            sudo rpm -i cheetah_${{ github.ref_name }}_linux_amd64.rpm
+            ```
+            </details>
+
+            <details>
+            <summary><b>Arch Linux</b></summary>
+
+            ```bash
+            # From AUR
+            yay -S cheetah-bin
+
+            # Or download package
+            sudo pacman -U cheetah_${{ github.ref_name }}_linux_amd64.pkg.tar.zst
+            ```
+            </details>
+
+            <details>
+            <summary><b>AppImage</b></summary>
+
+            ```bash
+            chmod +x cheetah-${{ github.ref_name }}-x86_64.AppImage
+            ./cheetah-${{ github.ref_name }}-x86_64.AppImage
+            ```
+            </details>
+
+            <details>
+            <summary><b>Flatpak</b></summary>
+
+            ```bash
+            flatpak install cheetah-${{ github.ref_name }}.flatpak
+            flatpak run com.kartoza.Cheetah
+            ```
+            </details>
+
+            <details>
+            <summary><b>Snap</b></summary>
+
+            ```bash
+            sudo snap install --dangerous cheetah_${{ github.ref_name }}_linux_amd64.snap
+            ```
+            </details>
+
+            <details>
+            <summary><b>Nix</b></summary>
+
+            ```bash
+            # Run directly from GitHub
+            nix run github:timlinux/cheetah
+
+            # Or add to your flake
+            inputs.cheetah.url = "github:timlinux/cheetah";
+            ```
+            </details>
+
+            <details>
+            <summary><b>macOS</b></summary>
+
+            ```bash
+            tar -xzf cheetah_${{ github.ref_name }}_darwin_arm64.tar.gz
+            sudo mv cheetah /usr/local/bin/
+            ```
+            </details>
+
+            <details>
+            <summary><b>Windows</b></summary>
+
+            1. Download `cheetah_${{ github.ref_name }}_windows_amd64.zip`
+            2. Extract to a folder
+            3. Add folder to PATH or run `cheetah.exe` directly
+            </details>
+
+            <details>
+            <summary><b>Docker</b></summary>
+
+            ```bash
+            docker run -it ghcr.io/timlinux/cheetah:${{ github.ref_name }}
+            ```
+            </details>
 
             ### 📚 Features
 
@@ -99,54 +358,4 @@ jobs:
 
             ---
             Made with ❤️ by [Kartoza](https://kartoza.com) | [Donate](https://github.com/sponsors/timlinux)
-          draft: false
-          prerelease: false
-
-  build:
-    name: Build and Upload
-    needs: release
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: windows
-            goarch: arm64
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-
-      - name: Build binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          EXT=""
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            EXT=".exe"
-          fi
-          go build -ldflags="-s -w" -o cheetah-${{ matrix.goos }}-${{ matrix.goarch }}${EXT} .
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: ./cheetah-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
-          asset_name: cheetah-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
-          asset_content_type: application/octet-stream
+          append_body: false

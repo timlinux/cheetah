@@ -33,9 +33,10 @@ import { parseDocument, isSupported } from './parsers/index.js';
 import {
   getRecentSessions,
   saveSession,
+  getSession,
   deleteSession,
   getSettings,
-  createOrUpdateSession,
+  hashContent,
 } from './storage.js';
 
 const MotionBox = motion(Box);
@@ -55,6 +56,8 @@ function App() {
   const [document, setDocument] = useState(null);
   const [words, setWords] = useState([]);
   const [documentHash, setDocumentHash] = useState(null);
+  const [savedPosition, setSavedPosition] = useState(0);
+  const [savedWpm, setSavedWpm] = useState(null);
   const [error, setError] = useState(null);
   const [recentSessions, setRecentSessions] = useState([]);
   const [adsenseConfig] = useState(getAdsenseConfig);
@@ -87,15 +90,26 @@ function App() {
         totalWords: result.words.length,
       });
 
-      // Create/update session for persistence
-      const hash = await createOrUpdateSession(
-        result.words.slice(0, 1000).join(' '), // Use first 1000 words for hashing
-        result.title,
-        result.words.length,
-        0,
-        getSettings().defaultWpm || 300
-      );
+      // Generate hash for this document
+      const contentForHash = result.words.slice(0, 1000).join(' ');
+      const hash = await hashContent(contentForHash.substring(0, 10240));
       setDocumentHash(hash);
+
+      // Check if we have a saved session for this document
+      const existingSession = getSession(hash);
+      if (existingSession && existingSession.position > 0) {
+        setSavedPosition(existingSession.position);
+        setSavedWpm(existingSession.wpm || null);
+        toast({
+          title: 'Resuming reading',
+          description: `Continuing from ${Math.round(existingSession.progress || 0)}% (word ${existingSession.position + 1})`,
+          status: 'info',
+          duration: 3000,
+        });
+      } else {
+        setSavedPosition(0);
+        setSavedWpm(null);
+      }
 
       setView('reading');
     } catch (err) {
@@ -135,6 +149,8 @@ function App() {
     setDocument(null);
     setWords([]);
     setDocumentHash(null);
+    setSavedPosition(0);
+    setSavedWpm(null);
   }, []);
 
   const handleDeleteSession = useCallback((hash) => {
@@ -167,8 +183,8 @@ function App() {
         onExit={handleExit}
         adsenseEnabled={adsenseConfig.enabled}
         adsenseKey={adsenseConfig.key}
-        initialPosition={0}
-        initialWpm={getSettings().defaultWpm || 300}
+        initialPosition={savedPosition}
+        initialWpm={savedWpm || getSettings().defaultWpm || 300}
         onSavePosition={handleSavePosition}
       />
     );

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -64,6 +65,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/v1/sessions/{id}/save", s.handleSavePosition)
 	mux.HandleFunc("GET /api/v1/saved", s.handleGetSavedSessions)
 	mux.HandleFunc("POST /api/v1/saved/{hash}/resume", s.handleResumeSession)
+
+	// Serve Hugo docs at /docs/
+	docsDir := "hugo/public"
+	if _, err := os.Stat(docsDir); err == nil {
+		docsFS := http.FileServer(http.Dir(docsDir))
+		mux.Handle("/docs/", http.StripPrefix("/docs/", docsFS))
+	}
 
 	// Static files for web frontend
 	if s.staticDir != "" {
