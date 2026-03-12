@@ -8,28 +8,80 @@ package frontend
 
 import "github.com/charmbracelet/lipgloss"
 
-// Colour constants for consistent styling
+// Kartoza branding colours
 const (
-	ColourWord       = "15"  // White for current word
-	ColourPrevious   = "8"   // Gray for previous word
-	ColourNext       = "7"   // Light gray for next words
-	ColourTitle      = "14"  // Cyan
-	ColourProgress   = "6"   // Cyan
-	ColourPaused     = "226" // Yellow
-	ColourPlaying    = "46"  // Green
-	ColourHelp       = "240" // Dim gray
-	ColourEmptyBar   = "236" // Dark gray
-	ColourFilledBar  = "39"  // Blue
-	ColourSeparator  = "238" // Separator lines
-	ColourKartoza    = "204" // Pink heart
-	ColourLink       = "39"  // Blue links
+	// Primary Kartoza orange
+	ColourKartozaOrange = "#FF6B35"
+	ColourKartozaDark   = "#1a1a2e"
+	ColourKartozaAccent = "#16213e"
+
+	// Cheetah theme (derived from Kartoza + cheetah spots)
+	ColourCheetahGold   = "#FFB347" // Cheetah fur
+	ColourCheetahSpots  = "#8B4513" // Dark brown spots
+	ColourCheetahCream  = "#FFFDD0" // Light cream
+	ColourCheetahAmber  = "#FFBF00" // Amber eyes
 )
 
-// Gradient colours for WPM bar (from slow to fast)
+// Colour constants for consistent styling
+const (
+	ColourWord       = "#FFFFFF" // White for current word
+	ColourPrevious   = "#888888" // Gray for previous word
+	ColourNext       = "#AAAAAA" // Light gray for next words
+	ColourTitle      = "#FF6B35" // Kartoza orange
+	ColourProgress   = "#FFB347" // Cheetah gold
+	ColourPaused     = "#FFBF00" // Amber (warning)
+	ColourPlaying    = "#32CD32" // Lime green
+	ColourHelp       = "#666666" // Dim gray
+	ColourEmptyBar   = "#333333" // Dark gray
+	ColourFilledBar  = "#FF6B35" // Kartoza orange
+	ColourSeparator  = "#444444" // Separator lines
+	ColourKartoza    = "#FF6B35" // Orange heart
+	ColourLink       = "#FFB347" // Gold links
+	ColourBorder     = "#FF6B35" // Kartoza orange borders
+	ColourDirIcon    = "#FFB347" // Gold for directories
+	ColourFileIcon   = "#FFFFFF" // White for files
+	ColourSelected   = "#FF6B35" // Kartoza orange selection
+	ColourSelectedFg = "#000000" // Black text on selection
+	ColourHeader     = "#FF6B35" // Header text
+	ColourPath       = "#FFB347" // Current path display
+)
+
+// Gradient colours for WPM bar (Kartoza-inspired warm tones)
 var GradientColours = []string{
-	"196", "202", "208", "214", "220", "226",
-	"190", "154", "118", "82", "46", "47",
+	"#8B0000", "#B22222", "#CD5C5C", "#F08080", // Reds (slow)
+	"#FF6B35", "#FF8C00", "#FFA500", "#FFB347", // Oranges (medium)
+	"#FFD700", "#ADFF2F", "#32CD32", "#00FF00", // Yellows to greens (fast)
 }
+
+// Box drawing characters for beautiful borders
+const (
+	BoxTopLeft     = "╭"
+	BoxTopRight    = "╮"
+	BoxBottomLeft  = "╰"
+	BoxBottomRight = "╯"
+	BoxHorizontal  = "─"
+	BoxVertical    = "│"
+	BoxTLeft       = "├"
+	BoxTRight      = "┤"
+	BoxTTop        = "┬"
+	BoxTBottom     = "┴"
+	BoxCross       = "┼"
+)
+
+// File type icons
+const (
+	IconFolder    = "📁"
+	IconFolderUp  = "📂"
+	IconPDF       = "📕"
+	IconWord      = "📘"
+	IconEpub      = "📗"
+	IconText      = "📄"
+	IconMarkdown  = "📝"
+	IconODT       = "📙"
+	IconFile      = "📄"
+	IconCheetah   = "🐆"
+	IconHeart     = "❤️"
+)
 
 // Styles holds all the lipgloss styles used in the application
 type Styles struct {
@@ -46,7 +98,19 @@ type Styles struct {
 	Title     lipgloss.Style
 	Separator lipgloss.Style
 
-	// File picker styles
+	// File browser styles
+	FileBrowserBorder       lipgloss.Style
+	FileBrowserHeader       lipgloss.Style
+	FileBrowserPath         lipgloss.Style
+	FileBrowserSelected     lipgloss.Style
+	FileBrowserNormal       lipgloss.Style
+	FileBrowserDirectory    lipgloss.Style
+	FileBrowserFile         lipgloss.Style
+	FileBrowserStatusBar    lipgloss.Style
+	FileBrowserHelp         lipgloss.Style
+	FileBrowserColumnHeader lipgloss.Style
+
+	// Legacy file picker styles (for compatibility)
 	FilePickerTitle    lipgloss.Style
 	FilePickerSelected lipgloss.Style
 	FilePickerNormal   lipgloss.Style
@@ -75,20 +139,55 @@ func NewStyles() Styles {
 		Title:     lipgloss.NewStyle().Foreground(lipgloss.Color(ColourTitle)).Bold(true),
 		Separator: lipgloss.NewStyle().Foreground(lipgloss.Color(ColourSeparator)),
 
-		// File picker
+		// File browser - beautiful bordered panel
+		FileBrowserBorder: lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(ColourBorder)).
+			Padding(0, 1),
+		FileBrowserHeader: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourHeader)).
+			Bold(true).
+			Align(lipgloss.Center),
+		FileBrowserPath: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourPath)).
+			Bold(true),
+		FileBrowserSelected: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourSelectedFg)).
+			Background(lipgloss.Color(ColourSelected)).
+			Bold(true).
+			Padding(0, 1),
+		FileBrowserNormal: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#CCCCCC")).
+			Padding(0, 1),
+		FileBrowserDirectory: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourDirIcon)).
+			Bold(true),
+		FileBrowserFile: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourFileIcon)),
+		FileBrowserStatusBar: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourHelp)).
+			Align(lipgloss.Center),
+		FileBrowserHelp: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#666666")),
+		FileBrowserColumnHeader: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(ColourHeader)).
+			Bold(true).
+			Underline(true),
+
+		// Legacy file picker (for compatibility)
 		FilePickerTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColourTitle)).
 			Bold(true).
 			MarginBottom(1),
 		FilePickerSelected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
-			Background(lipgloss.Color("39")).
+			Foreground(lipgloss.Color(ColourSelectedFg)).
+			Background(lipgloss.Color(ColourSelected)).
 			Bold(true).
 			Padding(0, 1),
 		FilePickerNormal: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252")),
+			Foreground(lipgloss.Color("#CCCCCC")),
 		FilePickerDir: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")),
+			Foreground(lipgloss.Color(ColourDirIcon)),
 
 		// Resume list
 		ResumeTitle: lipgloss.NewStyle().
@@ -96,12 +195,12 @@ func NewStyles() Styles {
 			Bold(true).
 			MarginBottom(1),
 		ResumeSelected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
-			Background(lipgloss.Color("39")).
+			Foreground(lipgloss.Color(ColourSelectedFg)).
+			Background(lipgloss.Color(ColourSelected)).
 			Bold(true).
 			Padding(0, 1),
 		ResumeNormal: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252")),
+			Foreground(lipgloss.Color("#CCCCCC")),
 		ResumeProgress: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(ColourProgress)),
 	}

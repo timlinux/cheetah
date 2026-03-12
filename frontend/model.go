@@ -4,12 +4,11 @@
 package frontend
 
 import (
+	"os"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/timlinux/cheetah/backend"
-	"github.com/timlinux/cheetah/documents"
 )
 
 // AppState represents the current state of the application UI
@@ -43,8 +42,8 @@ type Model struct {
 	renderer *Renderer
 	animator *WordAnimator
 
-	// File picker
-	filePicker   filepicker.Model
+	// File browser (custom beautiful file picker)
+	fileBrowser  *FileBrowser
 	selectedFile string
 	initialPath  string
 
@@ -65,13 +64,8 @@ type Model struct {
 
 // NewModel creates a new Model with the given client
 func NewModel(client *Client, documentPath string, initialWPM int) Model {
-	// Initialize file picker
-	fp := filepicker.New()
-	fp.AllowedTypes = documents.SupportedFormats()
-	fp.ShowHidden = false
-	fp.ShowPermissions = false
-	fp.ShowSize = true
-	fp.Height = 15
+	// Initialize custom file browser
+	fb := NewFileBrowser()
 
 	// Determine initial state
 	initialState := StateFilePicker
@@ -84,7 +78,7 @@ func NewModel(client *Client, documentPath string, initialWPM int) Model {
 		state:        initialState,
 		renderer:     NewRenderer(80, 24),
 		animator:     NewWordAnimator(),
-		filePicker:   fp,
+		fileBrowser:  fb,
 		initialPath:  documentPath,
 		initialWPM:   initialWPM,
 		readingState: &backend.ReadingState{IsPaused: true, WPM: initialWPM},
@@ -99,9 +93,6 @@ func (m Model) Init() tea.Cmd {
 	if m.initialPath != "" {
 		cmds = append(cmds, m.loadDocumentCmd(m.initialPath))
 	}
-
-	// Initialize file picker
-	cmds = append(cmds, m.filePicker.Init())
 
 	// Start tick for state polling
 	cmds = append(cmds, tickCmd())
@@ -154,22 +145,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.renderer.SetSize(msg.Width, msg.Height)
 
-		// Update file picker size
-		m.filePicker.Height = msg.Height - 10
-	}
-
-	// Update file picker
-	if m.state == StateFilePicker {
-		var cmd tea.Cmd
-		m.filePicker, cmd = m.filePicker.Update(msg)
-
-		// Check if file was selected
-		if didSelect, path := m.filePicker.DidSelectFile(msg); didSelect {
-			m.selectedFile = path
-			return m, m.loadDocumentCmd(path)
+		// Update file browser size
+		if m.fileBrowser != nil {
+			m.fileBrowser.SetSize(msg.Width, msg.Height)
 		}
-
-		return m, cmd
 	}
 
 	return m, nil
@@ -179,7 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.state {
 	case StateFilePicker:
-		return m.renderer.RenderFilePicker(m.filePicker, m.width, m.height)
+		return m.renderFileBrowser()
 	case StateResumeList:
 		return m.renderer.RenderResumeList(m.savedSessions, m.resumeCursor, m.width, m.height)
 	case StateReading:
@@ -196,25 +175,138 @@ func (m Model) View() string {
 	return ""
 }
 
+// renderFileBrowser renders the file browser centered on screen
+func (m Model) renderFileBrowser() string {
+	if m.fileBrowser == nil {
+		return ""
+	}
+
+	browserView := m.fileBrowser.View()
+
+	// Center horizontally and vertically
+	return centerContent(browserView, m.width, m.height)
+}
+
+// centerContent centers content on screen
+func centerContent(content string, width, height int) string {
+	// Count lines in content
+	lines := countLines(content)
+
+	// Calculate padding
+	topPadding := (height - lines) / 2
+	if topPadding < 0 {
+		topPadding = 0
+	}
+
+	var result string
+	for i := 0; i < topPadding; i++ {
+		result += "\n"
+	}
+	result += content
+
+	return result
+}
+
+func countLines(s string) int {
+	count := 1
+	for _, c := range s {
+		if c == '\n' {
+			count++
+		}
+	}
+	return count
+}
+
 // handleFilePickerInput processes keyboard input in file picker
 func (m Model) handleFilePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
-	case tea.KeyCtrlC, tea.KeyEsc:
+	case tea.KeyCtrlC:
 		return m, tea.Quit
 
-	case tea.KeyTab:
-		// Switch to resume list
-		sessions, _ := m.client.GetSavedSessions()
-		if len(sessions) > 0 {
-			m.savedSessions = sessions
-			m.resumeCursor = 0
-			m.state = StateResumeList
+	case tea.KeyEsc:
+		return m, tea.Quit
+
+	case tea.KeyUp, tea.KeyShiftTab:
+		m.fileBrowser.MoveUp()
+		return m, nil
+
+	case tea.KeyDown, tea.KeyTab:
+		// Tab switches to resume list if we have saved sessions
+		if msg.Type == tea.KeyTab {
+			sessions, _ := m.client.GetSavedSessions()
+			if len(sessions) > 0 {
+				m.savedSessions = sessions
+				m.resumeCursor = 0
+				m.state = StateResumeList
+				return m, nil
+			}
+		}
+		m.fileBrowser.MoveDown()
+		return m, nil
+
+	case tea.KeyPgUp:
+		m.fileBrowser.PageUp()
+		return m, nil
+
+	case tea.KeyPgDown:
+		m.fileBrowser.PageDown()
+		return m, nil
+
+	case tea.KeyHome:
+		m.fileBrowser.GoHome()
+		return m, nil
+
+	case tea.KeyEnd:
+		m.fileBrowser.GoEnd()
+		return m, nil
+
+	case tea.KeyEnter:
+		if m.fileBrowser.Enter() {
+			// File was selected
+			m.selectedFile = m.fileBrowser.SelectedFile
+			return m, m.loadDocumentCmd(m.selectedFile)
+		}
+		return m, nil
+
+	case tea.KeyBackspace:
+		m.fileBrowser.GoBack()
+		return m, nil
+
+	case tea.KeyRunes:
+		char := string(msg.Runes)
+		switch char {
+		case "q", "Q":
+			return m, tea.Quit
+		case "h", "H":
+			m.fileBrowser.GoBack()
+		case "j":
+			m.fileBrowser.MoveDown()
+		case "k":
+			m.fileBrowser.MoveUp()
+		case "l":
+			if m.fileBrowser.Enter() {
+				m.selectedFile = m.fileBrowser.SelectedFile
+				return m, m.loadDocumentCmd(m.selectedFile)
+			}
+		case "g":
+			m.fileBrowser.GoHome()
+		case "G":
+			m.fileBrowser.GoEnd()
+		case ".":
+			m.fileBrowser.ToggleHidden()
+		case "~":
+			// Go to home directory
+			if home, err := os.UserHomeDir(); err == nil {
+				m.fileBrowser.CurrentDir = home
+				m.fileBrowser.Refresh()
+			}
 		}
 		return m, nil
 	}
 
 	return m, nil
 }
+
 
 // handleResumeListInput processes keyboard input in resume list
 func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -241,6 +333,23 @@ func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.resumeCursor < len(m.savedSessions) {
 			session := m.savedSessions[m.resumeCursor]
 			return m, m.resumeSessionCmd(session.DocumentHash)
+		}
+
+	case tea.KeyRunes:
+		char := string(msg.Runes)
+		switch char {
+		case "j":
+			if m.resumeCursor < len(m.savedSessions)-1 {
+				m.resumeCursor++
+			} else {
+				m.resumeCursor = 0
+			}
+		case "k":
+			if m.resumeCursor > 0 {
+				m.resumeCursor--
+			} else {
+				m.resumeCursor = len(m.savedSessions) - 1
+			}
 		}
 	}
 

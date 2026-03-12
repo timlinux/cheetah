@@ -33,6 +33,9 @@ type Settings struct {
 
 	// AutoSaveInterval is how often to auto-save (in words read)
 	AutoSaveInterval int `json:"auto_save_interval"`
+
+	// LastDirectory is the last directory visited in the file picker
+	LastDirectory string `json:"last_directory"`
 }
 
 var (

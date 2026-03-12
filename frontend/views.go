@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/timlinux/cheetah/backend"
 	"github.com/timlinux/cheetah/font"
@@ -239,8 +238,8 @@ func (r *Renderer) renderProgressBar(progress float64, wpm int) string {
 
 // renderFullScreen renders content with header and footer
 func (r *Renderer) renderFullScreen(content, title string, width, height int) string {
-	// Header
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
+	// Header with Kartoza orange
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourKartozaOrange)).Bold(true)
 	headerText := "🐆 CHEETAH"
 	if title != "" {
 		headerText = fmt.Sprintf("🐆 CHEETAH - %s", title)
@@ -250,17 +249,17 @@ func (r *Renderer) renderFullScreen(content, title string, width, height int) st
 	// Help text
 	helpText := "SPACE pause │ r restart │ j/k speed │ h/l paragraph │ 1-9 presets │ s save │ ? docs │ ESC back │ q quit"
 
-	// Kartoza branding
-	kartozaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	heartStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("204"))
-	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	// Kartoza branding with proper colors
+	kartozaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
+	heartStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourKartozaOrange))
+	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourCheetahGold))
 	kartozaLine := kartozaStyle.Render("Made with ") +
 		heartStyle.Render("♥") +
 		kartozaStyle.Render(" by ") +
 		linkStyle.Render("Kartoza") +
-		kartozaStyle.Render(" | ") +
+		kartozaStyle.Render(" │ ") +
 		linkStyle.Render("Donate!") +
-		kartozaStyle.Render(" | ") +
+		kartozaStyle.Render(" │ ") +
 		linkStyle.Render("GitHub")
 
 	footer := lipgloss.JoinVertical(lipgloss.Center,
@@ -282,78 +281,6 @@ func (r *Renderer) renderFullScreen(content, title string, width, height int) st
 	}
 
 	// Build full screen
-	var fullContent strings.Builder
-	fullContent.WriteString(header)
-	fullContent.WriteString("\n")
-
-	for i := 0; i < topPadding; i++ {
-		fullContent.WriteString("\n")
-	}
-
-	centeredContent := lipgloss.PlaceHorizontal(width, lipgloss.Center, content)
-	fullContent.WriteString(centeredContent)
-
-	currentHeight := headerHeight + 1 + topPadding + contentHeight
-	for i := currentHeight; i < height-footerHeight; i++ {
-		fullContent.WriteString("\n")
-	}
-
-	fullContent.WriteString(footer)
-
-	return fullContent.String()
-}
-
-// RenderFilePicker renders the file picker screen
-func (r *Renderer) RenderFilePicker(fp filepicker.Model, width, height int) string {
-	title := r.styles.FilePickerTitle.Render("Select a document to read")
-	helpText := "Navigate with ↑/↓ │ Enter to select │ Tab for resume list │ ? help/docs │ ESC to quit"
-
-	// Supported formats info
-	formatsStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	formats := formatsStyle.Render("Supported: PDF, DOCX, EPUB, ODT, TXT, MD")
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		title,
-		formats,
-		"",
-		fp.View(),
-	)
-
-	// Kartoza branding
-	kartozaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	heartStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("204"))
-	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	kartozaLine := kartozaStyle.Render("Made with ") +
-		heartStyle.Render("♥") +
-		kartozaStyle.Render(" by ") +
-		linkStyle.Render("Kartoza") +
-		kartozaStyle.Render(" | ") +
-		linkStyle.Render("Donate!") +
-		kartozaStyle.Render(" | ") +
-		linkStyle.Render("GitHub")
-
-	// Header
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
-	header := lipgloss.PlaceHorizontal(width, lipgloss.Center,
-		headerStyle.Render("🐆 CHEETAH - RSVP Speed Reading"))
-
-	footer := lipgloss.JoinVertical(lipgloss.Center,
-		r.styles.Help.Render(helpText),
-		kartozaLine,
-	)
-	footer = lipgloss.PlaceHorizontal(width, lipgloss.Center, footer)
-
-	// Center content vertically
-	headerHeight := 1
-	footerHeight := 2
-	contentHeight := strings.Count(content, "\n") + 1
-	availableHeight := height - headerHeight - footerHeight - 2
-
-	topPadding := (availableHeight - contentHeight) / 2
-	if topPadding < 1 {
-		topPadding = 1
-	}
-
 	var fullContent strings.Builder
 	fullContent.WriteString(header)
 	fullContent.WriteString("\n")
