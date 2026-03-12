@@ -34,7 +34,7 @@ import (
 	"github.com/timlinux/cheetah/frontend"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 func main() {
 	// Check for subcommands first
@@ -79,7 +79,10 @@ func main() {
 func runStandaloneTUI(documentPath string, wpm int) {
 	// Create and run TUI with embedded engine
 	model := frontend.NewModel(documentPath, wpm)
-	p := tea.NewProgram(model, tea.WithAltScreen())
+	p := tea.NewProgram(model,
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(), // Enable mouse support for scrubber
+	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v\n", err)
 		os.Exit(1)

@@ -103,6 +103,15 @@ RSVP is a speed reading technique where:
 **US-023: Status display**
 > As a user, I want to see the current WPM, play/pause status, and paragraph position.
 
+**US-024: Interactive scrubber (TUI)**
+> As a TUI user, I want to click or drag on the progress bar to jump to any position in the document.
+
+**US-025: Interactive scrubber (Web)**
+> As a web user, I want to use a slider to scrub through the document to any position.
+
+**US-026: Go-to percentage**
+> As a user, I want to press 'g' and enter a percentage to jump directly to that position in the document.
+
 ### 3.4 Persistence
 
 **US-030: Auto-save position**
@@ -150,6 +159,10 @@ RSVP is a speed reading technique where:
 | FR-021 | System SHALL support jumping to previous paragraph |
 | FR-022 | System SHALL support jumping to start of current paragraph |
 | FR-023 | System SHALL support jumping to specific word index |
+| FR-024 | System SHALL support clicking/dragging on progress bar to jump to position (TUI) |
+| FR-025 | System SHALL support slider scrubbing to any position (Web) |
+| FR-026 | System SHALL support go-to mode ('g' key) to jump to a percentage |
+| FR-027 | System SHALL auto-pause during scrubbing/go-to and optionally resume after |
 
 ### 4.4 Persistence
 
@@ -171,9 +184,14 @@ RSVP is a speed reading technique where:
 | **h / Up Arrow** | Previous paragraph |
 | **l / Down Arrow** | Next paragraph |
 | **1-9** | Speed presets (1=200, 2=300, ..., 9=1000 WPM) |
+| **g** | Go-to mode (enter percentage to jump) |
+| **r** | Return to start of document |
 | **s** | Save position |
 | **Escape** | Return to document picker |
 | **q** | Quit application |
+| **Mouse click** | Click on progress bar to jump to position |
+| **Mouse drag** | Drag on progress bar to scrub through document |
+| **Mouse wheel** | Scroll to move forward/backward 10 words |
 
 ---
 

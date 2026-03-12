@@ -8,7 +8,6 @@ import {
   HStack,
   Text,
   Flex,
-  Progress,
   Link,
   Slider,
   SliderTrack,
@@ -16,6 +15,15 @@ import {
   SliderThumb,
   Tooltip,
   Badge,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Input,
+  Button,
+  useDisclosure,
 } from '@chakra-ui/react';
 import AdSense from './AdSense.jsx';
 
@@ -192,6 +200,12 @@ function ReadingScreen({
   const [currentListNumber, setCurrentListNumber] = useState(null);
   const timerRef = useRef(null);
 
+  // Go-to modal state
+  const { isOpen: isGotoOpen, onOpen: onGotoOpen, onClose: onGotoClose } = useDisclosure();
+  const [gotoInput, setGotoInput] = useState('');
+  const [wasPausedBeforeGoto, setWasPausedBeforeGoto] = useState(true);
+  const gotoInputRef = useRef(null);
+
   // Get current word (handle both string and object formats)
   const currentWordObj = words[currentIndex] || {};
   const currentWord = typeof currentWordObj === 'string' ? currentWordObj : currentWordObj.text || '';
@@ -340,6 +354,41 @@ function ReadingScreen({
     setIsPaused(true);
   }, []);
 
+  // Open go-to modal
+  const openGotoModal = useCallback(() => {
+    setWasPausedBeforeGoto(isPaused);
+    setIsPaused(true);
+    setGotoInput('');
+    onGotoOpen();
+    // Focus input after modal opens
+    setTimeout(() => {
+      if (gotoInputRef.current) {
+        gotoInputRef.current.focus();
+      }
+    }, 100);
+  }, [isPaused, onGotoOpen]);
+
+  // Handle go-to submit
+  const handleGotoSubmit = useCallback(() => {
+    const percentage = parseFloat(gotoInput);
+    if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
+      const targetIndex = Math.floor((percentage / 100) * words.length);
+      setCurrentIndex(Math.min(Math.max(0, targetIndex), words.length - 1));
+    }
+    onGotoClose();
+    if (!wasPausedBeforeGoto) {
+      setIsPaused(false);
+    }
+  }, [gotoInput, words.length, onGotoClose, wasPausedBeforeGoto]);
+
+  // Handle go-to cancel
+  const handleGotoCancel = useCallback(() => {
+    onGotoClose();
+    if (!wasPausedBeforeGoto) {
+      setIsPaused(false);
+    }
+  }, [onGotoClose, wasPausedBeforeGoto]);
+
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -415,6 +464,13 @@ function ReadingScreen({
           const presetWpm = [200, 300, 400, 500, 600, 700, 800, 900, 1000][parseInt(e.key) - 1];
           setWpm(presetWpm);
           break;
+        case 'g':
+        case 'G':
+          e.preventDefault();
+          if (!isGotoOpen) {
+            openGotoModal();
+          }
+          break;
         default:
           break;
       }
@@ -422,7 +478,7 @@ function ReadingScreen({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, wpm, words, onExit, onSavePosition, returnToStart]);
+  }, [currentIndex, wpm, words, onExit, onSavePosition, returnToStart, isGotoOpen, openGotoModal]);
 
   return (
     <Flex minH="100vh" direction="column" overflow="hidden">
@@ -506,23 +562,45 @@ function ReadingScreen({
         </HStack>
       </Flex>
 
-      {/* Progress bar */}
+      {/* Interactive progress scrubber */}
       <Box px={6} py={2}>
-        <Progress
-          value={progress}
-          size="sm"
-          borderRadius="full"
-          bg="gray.700"
-          sx={{
-            '& > div': {
-              bgGradient: 'linear(to-r, brand.500, green.400)',
-              transition: 'width 0.1s linear',
-            },
+        <Slider
+          value={currentIndex}
+          min={0}
+          max={Math.max(0, words.length - 1)}
+          onChange={(val) => {
+            setIsPaused(true); // Pause while scrubbing
+            setCurrentIndex(val);
           }}
-        />
-        <Text fontSize="xs" color="gray.500" textAlign="right" mt={1}>
-          {progress.toFixed(1)}% complete
-        </Text>
+          onChangeStart={() => {
+            setIsPaused(true); // Pause when starting to drag
+          }}
+          focusThumbOnChange={false}
+        >
+          <SliderTrack bg="gray.700" h="12px" borderRadius="full">
+            <SliderFilledTrack
+              bgGradient="linear(to-r, brand.500, green.400)"
+              transition="width 0.05s linear"
+            />
+          </SliderTrack>
+          <Tooltip
+            hasArrow
+            bg="gray.700"
+            color="white"
+            placement="top"
+            label={`Word ${currentIndex + 1} / ${words.length}`}
+          >
+            <SliderThumb boxSize={5} bg="white" _focus={{ boxShadow: 'outline' }} />
+          </Tooltip>
+        </Slider>
+        <HStack justify="space-between" mt={1}>
+          <Text fontSize="xs" color="gray.500">
+            Word {currentIndex + 1} / {words.length}
+          </Text>
+          <Text fontSize="xs" color="gray.500">
+            {progress.toFixed(1)}% complete
+          </Text>
+        </HStack>
       </Box>
 
       {/* Heading breadcrumb trail */}
@@ -590,6 +668,8 @@ function ReadingScreen({
           <Text>|</Text>
           <Text><b>1-9</b> presets</Text>
           <Text>|</Text>
+          <Text><b>g</b> goto</Text>
+          <Text>|</Text>
           <Text><b>ESC/b</b> back</Text>
         </HStack>
       </Flex>
@@ -619,6 +699,58 @@ function ReadingScreen({
           <AdSense publisherId={adsenseKey} showPreview={true} />
         </Box>
       )}
+
+      {/* Go-to Position Modal */}
+      <Modal isOpen={isGotoOpen} onClose={handleGotoCancel} isCentered>
+        <ModalOverlay bg="blackAlpha.700" />
+        <ModalContent bg="gray.800" borderColor="brand.500" borderWidth="1px">
+          <ModalHeader color="brand.400">Go to Position</ModalHeader>
+          <ModalBody>
+            <VStack spacing={4}>
+              <Text color="gray.300">Enter percentage (0-100):</Text>
+              <Input
+                ref={gotoInputRef}
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                value={gotoInput}
+                onChange={(e) => setGotoInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleGotoSubmit();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    handleGotoCancel();
+                  }
+                }}
+                placeholder="50"
+                size="lg"
+                textAlign="center"
+                fontSize="2xl"
+                bg="gray.700"
+                borderColor="gray.600"
+                _hover={{ borderColor: 'brand.400' }}
+                _focus={{ borderColor: 'brand.500', boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)' }}
+              />
+              {gotoInput && !isNaN(parseFloat(gotoInput)) && (
+                <Text color="gray.400" fontSize="sm">
+                  → Word {Math.min(Math.max(0, Math.floor((parseFloat(gotoInput) / 100) * words.length)), words.length - 1) + 1} / {words.length}
+                </Text>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={handleGotoCancel}>
+              Cancel
+            </Button>
+            <Button colorScheme="brand" onClick={handleGotoSubmit}>
+              Go
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Flex>
   );
 }

@@ -5,7 +5,10 @@ package frontend
 
 import (
 	"os"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/timlinux/cheetah/backend"
@@ -62,6 +65,14 @@ type Model struct {
 	initialWPM      int
 	documentLoading bool
 	loadError       string
+
+	// Scrubber state for mouse interaction
+	isDragging     bool // Whether user is dragging the scrubber
+	wasPausedBeforeDrag bool // Track pause state before drag started
+
+	// Go-to mode state
+	gotoMode   bool   // Whether user is in go-to mode (typing percentage)
+	gotoInput  string // Current input for go-to mode
 
 	// Settings
 	settingsCursor int
@@ -192,6 +203,74 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.fileBrowser != nil {
 			m.fileBrowser.SetSize(msg.Width, msg.Height)
 		}
+
+	case tea.MouseMsg:
+		if m.state == StateReading {
+			return m.handleMouseInput(msg)
+		}
+	}
+
+	return m, nil
+}
+
+// handleMouseInput processes mouse events during reading
+func (m Model) handleMouseInput(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Button {
+	case tea.MouseButtonLeft:
+		switch msg.Action {
+		case tea.MouseActionPress:
+			// Check if click is on progress bar
+			wordIndex := m.renderer.CalculateWordIndexFromClick(msg.X, msg.Y)
+			if wordIndex >= 0 {
+				// Start dragging
+				m.isDragging = true
+				// Remember pause state and pause during drag
+				if m.readingState != nil {
+					m.wasPausedBeforeDrag = m.readingState.IsPaused
+				}
+				m.engine.Pause()
+				// Jump to position
+				m.engine.JumpToWord(wordIndex)
+			}
+
+		case tea.MouseActionRelease:
+			if m.isDragging {
+				m.isDragging = false
+				// Resume if it was playing before drag started
+				if !m.wasPausedBeforeDrag {
+					m.engine.Play()
+				}
+			}
+
+		case tea.MouseActionMotion:
+			// Handle drag motion
+			if m.isDragging {
+				wordIndex := m.renderer.CalculateWordIndexFromClick(msg.X, msg.Y)
+				if wordIndex >= 0 {
+					m.engine.JumpToWord(wordIndex)
+				}
+			}
+		}
+
+	case tea.MouseButtonWheelUp:
+		// Scroll up = go back in document
+		if m.readingState != nil && m.readingState.WordIndex > 0 {
+			newIndex := m.readingState.WordIndex - 10
+			if newIndex < 0 {
+				newIndex = 0
+			}
+			m.engine.JumpToWord(newIndex)
+		}
+
+	case tea.MouseButtonWheelDown:
+		// Scroll down = go forward in document
+		if m.readingState != nil && m.readingState.WordIndex < m.readingState.TotalWords-1 {
+			newIndex := m.readingState.WordIndex + 10
+			if newIndex >= m.readingState.TotalWords {
+				newIndex = m.readingState.TotalWords - 1
+			}
+			m.engine.JumpToWord(newIndex)
+		}
 	}
 
 	return m, nil
@@ -211,7 +290,19 @@ func (m Model) View() string {
 		if m.loadError != "" {
 			return m.renderer.RenderError(m.loadError, m.width, m.height)
 		}
-		return m.renderer.RenderReadingScreen(m.readingState, m.animator, m.width, m.height)
+		// Render reading screen
+		baseView := m.renderer.RenderReadingScreen(m.readingState, m.animator, m.width, m.height)
+
+		// Overlay go-to input if in go-to mode
+		if m.gotoMode {
+			totalWords := 0
+			if m.readingState != nil {
+				totalWords = m.readingState.TotalWords
+			}
+			gotoOverlay := m.renderer.RenderGotoOverlay(m.gotoInput, totalWords)
+			return overlayContent(baseView, gotoOverlay, m.width, m.height)
+		}
+		return baseView
 	case StateSettings:
 		return m.renderer.RenderSettings(m.settingsCursor, m.width, m.height)
 	}
@@ -228,6 +319,142 @@ func (m Model) renderFileBrowser() string {
 
 	// Center horizontally and vertically
 	return centerContent(browserView, m.width, m.height)
+}
+
+// overlayContent places an overlay centered on top of base content
+func overlayContent(base, overlay string, width, height int) string {
+	// Split base and overlay into lines
+	baseLines := splitLines(base)
+	overlayLines := splitLines(overlay)
+
+	// Calculate overlay dimensions
+	overlayHeight := len(overlayLines)
+	overlayWidth := maxLineWidth(overlayLines)
+
+	// Calculate starting position for overlay (centered)
+	startY := (height - overlayHeight) / 2
+	if startY < 0 {
+		startY = 0
+	}
+	startX := (width - overlayWidth) / 2
+	if startX < 0 {
+		startX = 0
+	}
+
+	// Overlay the content
+	for i, overlayLine := range overlayLines {
+		y := startY + i
+		if y < len(baseLines) {
+			baseLine := baseLines[y]
+			// Insert overlay line into base line
+			baseLines[y] = insertAt(baseLine, overlayLine, startX)
+		}
+	}
+
+	return joinLines(baseLines)
+}
+
+// splitLines splits content into individual lines
+func splitLines(content string) []string {
+	return strings.Split(content, "\n")
+}
+
+// joinLines joins lines back into content
+func joinLines(lines []string) string {
+	return strings.Join(lines, "\n")
+}
+
+// maxLineWidth returns the maximum width of any line (visible characters only)
+func maxLineWidth(lines []string) int {
+	maxWidth := 0
+	for _, line := range lines {
+		width := visibleWidth(line)
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+// visibleWidth returns the visible width of a string (excluding ANSI escape codes)
+func visibleWidth(s string) int {
+	// Simple approximation - count runes, excluding ANSI escape sequences
+	width := 0
+	inEscape := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+		width++
+	}
+	return width
+}
+
+// insertAt inserts overlay text at position x in the base line
+func insertAt(base, overlay string, x int) string {
+	// Ensure base line is long enough
+	baseWidth := visibleWidth(base)
+	if baseWidth < x {
+		// Pad base with spaces
+		base += strings.Repeat(" ", x-baseWidth)
+	}
+
+	overlayWidth := visibleWidth(overlay)
+
+	// Simple replacement: just truncate base after x and append overlay
+	// This is a simplified version - full implementation would preserve ANSI codes
+	result := padToWidth(base, x) + overlay
+
+	// Append rest of base line after overlay if it extends beyond
+	restStart := x + overlayWidth
+	if restStart < baseWidth {
+		// Get the part of base after the overlay
+		baseRunes := []rune(base)
+		if restStart < len(baseRunes) {
+			result += string(baseRunes[restStart:])
+		}
+	}
+
+	return result
+}
+
+// padToWidth returns the first n visible characters of a string
+func padToWidth(s string, n int) string {
+	var result strings.Builder
+	width := 0
+	inEscape := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			result.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			result.WriteRune(r)
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+		if width >= n {
+			break
+		}
+		result.WriteRune(r)
+		width++
+	}
+	// Pad with spaces if needed
+	for width < n {
+		result.WriteRune(' ')
+		width++
+	}
+	return result.String()
 }
 
 // centerContent centers content on screen
@@ -407,6 +634,11 @@ func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleReadingInput processes keyboard input during reading
 func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle go-to mode input
+	if m.gotoMode {
+		return m.handleGotoModeInput(msg)
+	}
+
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -473,6 +705,18 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Return to start
 			m.engine.ReturnToStart()
 			m.engine.Pause()
+
+		case "g":
+			// Enter go-to mode
+			m.gotoMode = true
+			m.gotoInput = ""
+			// Pause while entering position
+			if m.readingState != nil && !m.readingState.IsPaused {
+				m.wasPausedBeforeDrag = false
+				m.engine.Pause()
+			} else {
+				m.wasPausedBeforeDrag = true
+			}
 		}
 
 	case tea.KeyLeft:
@@ -505,6 +749,80 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// handleGotoModeInput handles keyboard input when in go-to percentage mode
+func (m Model) handleGotoModeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		// Cancel go-to mode
+		m.gotoMode = false
+		m.gotoInput = ""
+		// Resume if it was playing before
+		if !m.wasPausedBeforeDrag {
+			m.engine.Play()
+		}
+		return m, nil
+
+	case tea.KeyEnter:
+		// Execute the jump
+		if m.gotoInput != "" && m.readingState != nil && m.readingState.TotalWords > 0 {
+			percentage, err := strconv.ParseFloat(m.gotoInput, 64)
+			if err == nil {
+				// Clamp percentage to 0-100
+				if percentage < 0 {
+					percentage = 0
+				}
+				if percentage > 100 {
+					percentage = 100
+				}
+				// Calculate word index
+				wordIndex := int(percentage / 100.0 * float64(m.readingState.TotalWords))
+				if wordIndex >= m.readingState.TotalWords {
+					wordIndex = m.readingState.TotalWords - 1
+				}
+				m.engine.JumpToWord(wordIndex)
+			}
+		}
+		m.gotoMode = false
+		m.gotoInput = ""
+		// Resume if it was playing before
+		if !m.wasPausedBeforeDrag {
+			m.engine.Play()
+		}
+		return m, nil
+
+	case tea.KeyBackspace:
+		// Delete last character
+		if len(m.gotoInput) > 0 {
+			m.gotoInput = m.gotoInput[:len(m.gotoInput)-1]
+		}
+		return m, nil
+
+	case tea.KeyRunes:
+		// Only accept digits and decimal point
+		for _, r := range msg.Runes {
+			if unicode.IsDigit(r) || (r == '.' && !containsRune(m.gotoInput, '.')) {
+				// Limit input length
+				if len(m.gotoInput) < 6 {
+					m.gotoInput += string(r)
+				}
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// containsRune checks if a string contains a specific rune
+func containsRune(s string, r rune) bool {
+	for _, c := range s {
+		if c == r {
+			return true
+		}
+	}
+	return false
 }
 
 // handleSettingsInput processes keyboard input in settings
