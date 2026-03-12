@@ -15,6 +15,31 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges -20)
+          fi
+
+          # Escape for GitHub Actions
+          CHANGES="${CHANGES//'%'/'%25'}"
+          CHANGES="${CHANGES//$'\n'/'%0A'}"
+          CHANGES="${CHANGES//$'\r'/'%0D'}"
+
+          echo "changes=$CHANGES" >> $GITHUB_OUTPUT
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -22,32 +47,58 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Cheetah ${{ github.ref_name }}
+          release_name: 🐆 Cheetah ${{ github.ref_name }}
           body: |
-            ## Cheetah ${{ github.ref_name }}
+            ## 🐆 Cheetah ${{ github.ref_name }}
 
-            ### What's New
-            See [CHANGELOG.md](CHANGELOG.md) for details.
+            **RSVP Speed Reading Application** - Read at speeds up to 1000+ WPM!
 
-            ### Downloads
-            - **Linux amd64**: `cheetah-linux-amd64`
-            - **Linux arm64**: `cheetah-linux-arm64`
-            - **macOS amd64**: `cheetah-darwin-amd64`
-            - **macOS arm64 (Apple Silicon)**: `cheetah-darwin-arm64`
-            - **Windows amd64**: `cheetah-windows-amd64.exe`
+            ### ✨ What's New
 
-            ### Installation
+            ${{ steps.release_notes.outputs.changes }}
+
+            ### 📦 Downloads
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | 🐧 Linux | x86_64 | `cheetah-linux-amd64` |
+            | 🐧 Linux | ARM64 | `cheetah-linux-arm64` |
+            | 🍎 macOS | Intel | `cheetah-darwin-amd64` |
+            | 🍎 macOS | Apple Silicon | `cheetah-darwin-arm64` |
+            | 🪟 Windows | x86_64 | `cheetah-windows-amd64.exe` |
+            | 🪟 Windows | ARM64 | `cheetah-windows-arm64.exe` |
+
+            ### 🚀 Quick Start
+
             ```bash
-            # Linux/macOS
+            # Linux/macOS - Download and install
             chmod +x cheetah-*
             sudo mv cheetah-* /usr/local/bin/cheetah
 
-            # Or use Nix
-            nix run github:timlinux/cheetah
+            # Run TUI mode
+            cheetah ~/Documents/book.pdf
+
+            # Run Web mode
+            cheetah web -port 8787
             ```
 
+            ### 📚 Features
+
+            - **TUI Mode**: Beautiful terminal interface with block-letter word display
+            - **Web Mode**: Browser-based interface with drag-drop document support
+            - **Document Support**: PDF, DOCX, EPUB, ODT, TXT, Markdown
+            - **Smart Pacing**: Punctuation-aware delays for natural reading
+            - **Session Persistence**: Resume reading where you left off
+            - **Interactive Scrubber**: Click/drag to jump anywhere in the document
+
+            ### 🔗 Links
+
+            - [Documentation](https://timlinux.github.io/cheetah/docs/)
+            - [Source Code](https://github.com/timlinux/cheetah)
+            - [Report Issues](https://github.com/timlinux/cheetah/issues)
+
             ---
-            Made with ♥ by [Kartoza](https://kartoza.com)
+            Made with ❤️ by [Kartoza](https://kartoza.com) | [Donate](https://github.com/sponsors/timlinux)
           draft: false
           prerelease: false
 
@@ -68,6 +119,8 @@ jobs:
             goarch: arm64
           - goos: windows
             goarch: amd64
+          - goos: windows
+            goarch: arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
