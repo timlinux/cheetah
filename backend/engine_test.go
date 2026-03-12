@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/timlinux/cheetah/sessions"
 )
 
 func createTestDocument(t *testing.T, content string) string {
@@ -268,6 +270,10 @@ func TestEngineSubscribeState(t *testing.T) {
 }
 
 func TestEngineSavePosition(t *testing.T) {
+	// Use a temporary directory for sessions storage during tests
+	tmpDir := t.TempDir()
+	sessions.SetStorePath(filepath.Join(tmpDir, "sessions.json"))
+
 	engine := NewEngine(DefaultConfig())
 	testFile := createTestDocument(t, "Hello world test document.")
 
@@ -286,7 +292,7 @@ func TestEngineSavePosition(t *testing.T) {
 	}
 
 	// Check saved sessions
-	sessions := engine.GetSavedSessions()
+	savedSessions := engine.GetSavedSessions()
 	// Note: sessions might be empty if persistence isn't working
-	_ = sessions
+	_ = savedSessions
 }
