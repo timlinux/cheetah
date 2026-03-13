@@ -108,7 +108,7 @@ The end.`
 	}
 
 	// Verify words are extracted
-	allWords := doc.GetAllWords()
+	allWords := GetAllWords(doc)
 	if len(allWords) == 0 {
 		t.Error("Expected words to be extracted")
 	}
@@ -134,13 +134,9 @@ func TestTextParserEmptyFile(t *testing.T) {
 	}
 
 	parser := &TextParser{}
-	doc, err := parser.Parse(testFile)
-	if err != nil {
-		t.Fatalf("Unexpected error parsing empty file: %v", err)
-	}
-
-	if doc.TotalWords != 0 {
-		t.Errorf("Expected 0 words, got %d", doc.TotalWords)
+	_, err := parser.Parse(testFile)
+	if err != ErrEmptyDocument {
+		t.Errorf("Expected ErrEmptyDocument for empty file, got %v", err)
 	}
 }
 
@@ -176,9 +172,11 @@ func TestDocumentGetWord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			word := doc.GetWord(tt.index)
-			if word != tt.expected {
-				t.Errorf("GetWord(%d) = %q, expected %q", tt.index, word, tt.expected)
+			word, _, ok := GetWordAt(doc, tt.index)
+			if !ok && tt.expected != "" {
+				t.Errorf("GetWordAt(%d) returned not ok, expected %q", tt.index, tt.expected)
+			} else if ok && word != tt.expected {
+				t.Errorf("GetWordAt(%d) = %q, expected %q", tt.index, word, tt.expected)
 			}
 		})
 	}
@@ -187,9 +185,9 @@ func TestDocumentGetWord(t *testing.T) {
 func TestDocumentGetParagraphForWord(t *testing.T) {
 	doc := &Document{
 		Paragraphs: []Paragraph{
-			{Words: []string{"Hello", "world"}},        // words 0-1
-			{Words: []string{"Foo", "bar", "baz"}},     // words 2-4
-			{Words: []string{"One", "two", "three"}},   // words 5-7
+			{Words: []string{"Hello", "world"}, Index: 0},      // words 0-1
+			{Words: []string{"Foo", "bar", "baz"}, Index: 1},   // words 2-4
+			{Words: []string{"One", "two", "three"}, Index: 2}, // words 5-7
 		},
 		TotalWords: 8,
 	}
@@ -205,15 +203,15 @@ func TestDocumentGetParagraphForWord(t *testing.T) {
 		{4, 1},
 		{5, 2},
 		{7, 2},
-		{8, -1},  // Out of bounds
-		{-1, -1}, // Negative
+		{8, 2},  // Out of bounds returns last paragraph
+		{-1, 0}, // Negative returns first paragraph
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			paraIndex := doc.GetParagraphForWord(tt.wordIndex)
+			paraIndex := GetParagraphForWordIndex(doc, tt.wordIndex)
 			if paraIndex != tt.expected {
-				t.Errorf("GetParagraphForWord(%d) = %d, expected %d", tt.wordIndex, paraIndex, tt.expected)
+				t.Errorf("GetParagraphForWordIndex(%d) = %d, expected %d", tt.wordIndex, paraIndex, tt.expected)
 			}
 		})
 	}
@@ -222,9 +220,9 @@ func TestDocumentGetParagraphForWord(t *testing.T) {
 func TestDocumentGetParagraphStartWord(t *testing.T) {
 	doc := &Document{
 		Paragraphs: []Paragraph{
-			{Words: []string{"Hello", "world"}},      // words 0-1
-			{Words: []string{"Foo", "bar", "baz"}},   // words 2-4
-			{Words: []string{"One", "two", "three"}}, // words 5-7
+			{Words: []string{"Hello", "world"}, Index: 0},      // words 0-1
+			{Words: []string{"Foo", "bar", "baz"}, Index: 1},   // words 2-4
+			{Words: []string{"One", "two", "three"}, Index: 2}, // words 5-7
 		},
 		TotalWords: 8,
 	}
@@ -236,58 +234,39 @@ func TestDocumentGetParagraphStartWord(t *testing.T) {
 		{0, 0},
 		{1, 2},
 		{2, 5},
-		{3, -1},  // Out of bounds
-		{-1, -1}, // Negative
+		{3, 8},  // Out of bounds returns total words
+		{-1, 0}, // Negative returns 0
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			wordIndex := doc.GetParagraphStartWord(tt.paraIndex)
+			wordIndex := GetParagraphStartIndex(doc, tt.paraIndex)
 			if wordIndex != tt.expected {
-				t.Errorf("GetParagraphStartWord(%d) = %d, expected %d", tt.paraIndex, wordIndex, tt.expected)
+				t.Errorf("GetParagraphStartIndex(%d) = %d, expected %d", tt.paraIndex, wordIndex, tt.expected)
 			}
 		})
 	}
 }
 
 func TestDocumentHash(t *testing.T) {
-	doc1 := &Document{
-		Paragraphs: []Paragraph{
-			{Words: []string{"Hello", "world"}},
-		},
-		TotalWords: 2,
-	}
+	processor := DefaultProcessor()
 
-	doc2 := &Document{
-		Paragraphs: []Paragraph{
-			{Words: []string{"Hello", "world"}},
-		},
-		TotalWords: 2,
-	}
-
-	doc3 := &Document{
-		Paragraphs: []Paragraph{
-			{Words: []string{"Different", "content"}},
-		},
-		TotalWords: 2,
-	}
-
-	hash1 := doc1.Hash()
-	hash2 := doc2.Hash()
-	hash3 := doc3.Hash()
+	doc1 := processor.Process("Hello world", "test1", "/test1.txt")
+	doc2 := processor.Process("Hello world", "test2", "/test2.txt")
+	doc3 := processor.Process("Different content", "test3", "/test3.txt")
 
 	// Same content should have same hash
-	if hash1 != hash2 {
-		t.Errorf("Same content should have same hash: %s != %s", hash1, hash2)
+	if doc1.Hash != doc2.Hash {
+		t.Errorf("Same content should have same hash: %s != %s", doc1.Hash, doc2.Hash)
 	}
 
 	// Different content should have different hash
-	if hash1 == hash3 {
+	if doc1.Hash == doc3.Hash {
 		t.Error("Different content should have different hash")
 	}
 
 	// Hash should be non-empty
-	if hash1 == "" {
+	if doc1.Hash == "" {
 		t.Error("Hash should not be empty")
 	}
 }

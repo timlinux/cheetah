@@ -4,44 +4,22 @@
 package sessions
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func setupTestManager(t *testing.T) *Manager {
+func setupTestSessions(t *testing.T) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	configDir := filepath.Join(tmpDir, ".config", "cheetah")
 
-	// Set up environment to use temp dir
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	t.Cleanup(func() {
-		os.Setenv("HOME", oldHome)
-	})
-
-	manager := NewManager()
-	if manager == nil {
-		t.Fatal("NewManager returned nil")
-	}
-
-	// Ensure directory exists
-	os.MkdirAll(configDir, 0755)
-
-	return manager
+	// Set up custom store path for testing
+	testStorePath := filepath.Join(tmpDir, "sessions.json")
+	SetStorePath(testStorePath)
 }
 
-func TestNewManager(t *testing.T) {
-	manager := setupTestManager(t)
-	if manager == nil {
-		t.Fatal("Expected non-nil manager")
-	}
-}
-
-func TestManagerSaveAndLoad(t *testing.T) {
-	manager := setupTestManager(t)
+func TestSaveAndLoad(t *testing.T) {
+	setupTestSessions(t)
 
 	session := Session{
 		DocumentHash:  "testhash123",
@@ -54,19 +32,19 @@ func TestManagerSaveAndLoad(t *testing.T) {
 	}
 
 	// Save session
-	err := manager.SaveSession(session)
+	err := Save(session)
 	if err != nil {
-		t.Fatalf("SaveSession failed: %v", err)
+		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Load session
-	loaded, err := manager.GetSession(session.DocumentHash)
+	loaded, err := Load(session.DocumentHash)
 	if err != nil {
-		t.Fatalf("GetSession failed: %v", err)
+		t.Fatalf("Load failed: %v", err)
 	}
 
 	if loaded == nil {
-		t.Fatal("GetSession returned nil for existing session")
+		t.Fatal("Load returned nil for existing session")
 	}
 
 	if loaded.DocumentHash != session.DocumentHash {
@@ -82,22 +60,17 @@ func TestManagerSaveAndLoad(t *testing.T) {
 	}
 }
 
-func TestManagerGetNonExistentSession(t *testing.T) {
-	manager := setupTestManager(t)
+func TestLoadNonExistentSession(t *testing.T) {
+	setupTestSessions(t)
 
-	session, err := manager.GetSession("nonexistent")
-	if err != nil {
-		// Some implementations might return an error
-		return
-	}
-
-	if session != nil {
-		t.Error("Expected nil for non-existent session")
+	_, err := Load("nonexistent")
+	if err != ErrSessionNotFound {
+		t.Errorf("Expected ErrSessionNotFound, got %v", err)
 	}
 }
 
-func TestManagerGetAllSessions(t *testing.T) {
-	manager := setupTestManager(t)
+func TestLoadAllSessions(t *testing.T) {
+	setupTestSessions(t)
 
 	// Save multiple sessions
 	sessions := []Session{
@@ -122,20 +95,20 @@ func TestManagerGetAllSessions(t *testing.T) {
 	}
 
 	for _, s := range sessions {
-		if err := manager.SaveSession(s); err != nil {
-			t.Fatalf("SaveSession failed: %v", err)
+		if err := Save(s); err != nil {
+			t.Fatalf("Save failed: %v", err)
 		}
 	}
 
 	// Get all sessions
-	allSessions := manager.GetAllSessions()
+	allSessions := LoadAll()
 	if len(allSessions) < 2 {
 		t.Errorf("Expected at least 2 sessions, got %d", len(allSessions))
 	}
 }
 
-func TestManagerDeleteSession(t *testing.T) {
-	manager := setupTestManager(t)
+func TestDeleteSession(t *testing.T) {
+	setupTestSessions(t)
 
 	session := Session{
 		DocumentHash:  "deleteme",
@@ -148,31 +121,29 @@ func TestManagerDeleteSession(t *testing.T) {
 	}
 
 	// Save session
-	if err := manager.SaveSession(session); err != nil {
-		t.Fatalf("SaveSession failed: %v", err)
+	if err := Save(session); err != nil {
+		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Verify it exists
-	loaded, _ := manager.GetSession(session.DocumentHash)
-	if loaded == nil {
+	if !HasSession(session.DocumentHash) {
 		t.Fatal("Session should exist before deletion")
 	}
 
 	// Delete session
-	err := manager.DeleteSession(session.DocumentHash)
+	err := Delete(session.DocumentHash)
 	if err != nil {
-		t.Fatalf("DeleteSession failed: %v", err)
+		t.Fatalf("Delete failed: %v", err)
 	}
 
 	// Verify it's gone
-	deleted, _ := manager.GetSession(session.DocumentHash)
-	if deleted != nil {
+	if HasSession(session.DocumentHash) {
 		t.Error("Session should not exist after deletion")
 	}
 }
 
-func TestManagerUpdateSession(t *testing.T) {
-	manager := setupTestManager(t)
+func TestUpdateSession(t *testing.T) {
+	setupTestSessions(t)
 
 	session := Session{
 		DocumentHash:  "updateme",
@@ -185,8 +156,8 @@ func TestManagerUpdateSession(t *testing.T) {
 	}
 
 	// Save initial session
-	if err := manager.SaveSession(session); err != nil {
-		t.Fatalf("SaveSession failed: %v", err)
+	if err := Save(session); err != nil {
+		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Update session
@@ -194,14 +165,14 @@ func TestManagerUpdateSession(t *testing.T) {
 	session.LastWPM = 400
 	session.LastAccessed = time.Now()
 
-	if err := manager.SaveSession(session); err != nil {
-		t.Fatalf("SaveSession (update) failed: %v", err)
+	if err := Save(session); err != nil {
+		t.Fatalf("Save (update) failed: %v", err)
 	}
 
 	// Verify update
-	loaded, err := manager.GetSession(session.DocumentHash)
+	loaded, err := Load(session.DocumentHash)
 	if err != nil {
-		t.Fatalf("GetSession failed: %v", err)
+		t.Fatalf("Load failed: %v", err)
 	}
 
 	if loaded.LastPosition != 100 {
@@ -224,5 +195,63 @@ func TestSessionProgress(t *testing.T) {
 
 	if progress != expected {
 		t.Errorf("Progress calculation wrong: got %.2f, expected %.2f", progress, expected)
+	}
+}
+
+func TestClearSessions(t *testing.T) {
+	setupTestSessions(t)
+
+	// Save a session
+	session := Session{
+		DocumentHash:  "clearthis",
+		DocumentPath:  "/path/to/clear.txt",
+		DocumentTitle: "Clear This",
+		LastPosition:  0,
+		TotalWords:    100,
+		LastWPM:       300,
+		LastAccessed:  time.Now(),
+	}
+
+	if err := Save(session); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Clear all sessions
+	if err := Clear(); err != nil {
+		t.Fatalf("Clear failed: %v", err)
+	}
+
+	// Verify it's gone
+	if HasSession(session.DocumentHash) {
+		t.Error("Session should not exist after clear")
+	}
+}
+
+func TestHasSession(t *testing.T) {
+	setupTestSessions(t)
+
+	// Should not have session initially
+	if HasSession("notexist") {
+		t.Error("HasSession should return false for non-existent session")
+	}
+
+	// Save a session
+	session := Session{
+		DocumentHash:  "exists",
+		DocumentPath:  "/path/to/exists.txt",
+		DocumentTitle: "Exists",
+		LastPosition:  0,
+		TotalWords:    100,
+		LastWPM:       300,
+		LastAccessed:  time.Now(),
+	}
+
+	if err := Save(session); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Should have session now
+	if !HasSession("exists") {
+		t.Error("HasSession should return true for existing session")
 	}
 }

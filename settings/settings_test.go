@@ -4,7 +4,6 @@
 package settings
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -13,33 +12,31 @@ func setupTestSettings(t *testing.T) *Settings {
 	t.Helper()
 	tmpDir := t.TempDir()
 
-	// Set up environment to use temp dir
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	t.Cleanup(func() {
-		os.Setenv("HOME", oldHome)
-	})
+	// Set up custom settings path for testing
+	testSettingsPath := filepath.Join(tmpDir, "settings.json")
+	SetSettingsPath(testSettingsPath)
 
-	// Create config directory
-	configDir := filepath.Join(tmpDir, ".config", "cheetah")
-	os.MkdirAll(configDir, 0755)
+	settings, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load settings: %v", err)
+	}
 
-	return Load()
+	return settings
 }
 
 func TestDefaultSettings(t *testing.T) {
-	settings := Default()
+	settings := DefaultSettings()
 
 	if settings.DefaultWPM <= 0 {
 		t.Error("DefaultWPM should be positive")
 	}
 
-	if settings.MinWPM <= 0 {
-		t.Error("MinWPM should be positive")
+	if settings.NextWordsCount <= 0 {
+		t.Error("NextWordsCount should be positive")
 	}
 
-	if settings.MaxWPM <= settings.MinWPM {
-		t.Error("MaxWPM should be greater than MinWPM")
+	if settings.AutoSaveInterval <= 0 {
+		t.Error("AutoSaveInterval should be positive")
 	}
 }
 
@@ -57,77 +54,75 @@ func TestLoadSettings(t *testing.T) {
 }
 
 func TestSaveAndLoadSettings(t *testing.T) {
-	settings := setupTestSettings(t)
+	tmpDir := t.TempDir()
+	testSettingsPath := filepath.Join(tmpDir, "settings.json")
+	SetSettingsPath(testSettingsPath)
+
+	settings, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
 
 	// Modify settings
 	settings.DefaultWPM = 450
-	settings.MinWPM = 100
-	settings.MaxWPM = 1500
+	settings.ShowProgress = false
+	settings.NextWordsCount = 5
 
 	// Save
-	err := settings.Save()
+	err = settings.Save()
 	if err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
-	// Load again
-	loaded := Load()
-	if loaded == nil {
-		t.Fatal("Load returned nil after save")
+	// Clear cache and load again
+	SetSettingsPath(testSettingsPath)
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed after save: %v", err)
 	}
 
 	if loaded.DefaultWPM != 450 {
 		t.Errorf("DefaultWPM not persisted: got %d, expected 450", loaded.DefaultWPM)
 	}
 
-	if loaded.MinWPM != 100 {
-		t.Errorf("MinWPM not persisted: got %d, expected 100", loaded.MinWPM)
+	if loaded.ShowProgress != false {
+		t.Error("ShowProgress not persisted")
 	}
 
-	if loaded.MaxWPM != 1500 {
-		t.Errorf("MaxWPM not persisted: got %d, expected 1500", loaded.MaxWPM)
+	if loaded.NextWordsCount != 5 {
+		t.Errorf("NextWordsCount not persisted: got %d, expected 5", loaded.NextWordsCount)
 	}
 }
 
 func TestSettingsValidation(t *testing.T) {
-	settings := Default()
+	settings := DefaultSettings()
 
-	// Test that validation ensures reasonable values
-	if settings.MinWPM > settings.DefaultWPM {
-		t.Error("MinWPM should not exceed DefaultWPM")
+	// Test that default values are reasonable
+	if settings.DefaultWPM < 100 {
+		t.Error("DefaultWPM should be at least 100")
 	}
 
-	if settings.MaxWPM < settings.DefaultWPM {
-		t.Error("MaxWPM should not be less than DefaultWPM")
+	if settings.DefaultWPM > 1000 {
+		t.Error("DefaultWPM should not exceed 1000")
 	}
 }
 
 func TestSettingsPath(t *testing.T) {
-	tmpDir := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
 	path := GetSettingsPath()
 
-	// Path should contain .config/cheetah
+	// Path should be absolute
 	if !filepath.IsAbs(path) {
 		t.Error("Settings path should be absolute")
 	}
 
-	expectedSuffix := filepath.Join(".config", "cheetah", "settings.json")
-	if !contains(path, "cheetah") {
-		t.Errorf("Settings path should contain 'cheetah': %s", path)
+	// Path should end with .json
+	if filepath.Ext(path) != ".json" {
+		t.Errorf("Settings path should end with .json: %s", path)
 	}
-	_ = expectedSuffix
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && contains(s[1:], substr) || s[:len(substr)] == substr)
 }
 
 func TestSettingsDefaults(t *testing.T) {
-	defaults := Default()
+	defaults := DefaultSettings()
 
 	tests := []struct {
 		name     string
@@ -135,8 +130,8 @@ func TestSettingsDefaults(t *testing.T) {
 		minValue int
 	}{
 		{"DefaultWPM", defaults.DefaultWPM, 100},
-		{"MinWPM", defaults.MinWPM, 10},
-		{"MaxWPM", defaults.MaxWPM, 500},
+		{"NextWordsCount", defaults.NextWordsCount, 1},
+		{"AutoSaveInterval", defaults.AutoSaveInterval, 10},
 	}
 
 	for _, tt := range tests {

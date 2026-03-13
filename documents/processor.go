@@ -192,6 +192,11 @@ func GetParagraphStartIndex(doc *Document, paragraphIndex int) int {
 	return wordIndex
 }
 
+// ProcessText is a convenience function that processes text using the default processor
+func ProcessText(text string) []Paragraph {
+	return DefaultProcessor().ExtractParagraphs(text)
+}
+
 // GetParagraphForWordIndex returns which paragraph contains a given word index
 func GetParagraphForWordIndex(doc *Document, wordIndex int) int {
 	if wordIndex < 0 {
