@@ -4,6 +4,8 @@ title: "Cheetah Documentation"
 
 Welcome to the Cheetah documentation. Cheetah is an RSVP (Rapid Serial Visual Presentation) speed reading application that helps you read at speeds up to 1000+ words per minute.
 
+![Cheetah Demo](/images/cheetah-demo.gif)
+
 ## What is RSVP?
 
 RSVP displays words one at a time in a fixed location, eliminating the need for eye movement across lines of text. This allows your brain to focus entirely on word recognition and comprehension, dramatically increasing your reading speed.

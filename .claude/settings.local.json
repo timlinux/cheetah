@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(pkill:*)",
+      "Bash(nix develop --command bash -c \"./cheetah 2>&1 &\")"
     ]
   }
 }

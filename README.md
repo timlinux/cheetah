@@ -5,7 +5,7 @@
 
 **Cheetah** is a Rapid Serial Visual Presentation (RSVP) speed reading application that displays words one at a time, allowing you to read at speeds up to 1000+ WPM.
 
-![Cheetah Screenshot](docs/screenshot.png)
+![Cheetah Demo](demo/cheetah-demo.gif)
 
 ## Features
 
