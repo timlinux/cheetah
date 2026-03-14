@@ -7,6 +7,10 @@
 
 ![Cheetah Demo](demo/cheetah-demo.gif)
 
+Note that my screen cast recorder (asciinema) does not accurately record the
+font rendering or playback framerate, but hopeully the little demo above gives
+you a sense of how it works.
+
 ## Features
 
 - **RSVP Reading** - Words displayed one at a time in a fixed location
