@@ -154,7 +154,7 @@ cheetah/
 ├── backend/          # Reading engine + REST API
 ├── frontend/         # TUI (Bubble Tea)
 ├── documents/        # Document parsers
-├── font/             # Block letter rendering
+├── (uses: github.com/timlinux/blockfont)  # Block letter rendering
 ├── sessions/         # Position persistence
 ├── settings/         # User preferences
 └── web/              # Web frontend (React)

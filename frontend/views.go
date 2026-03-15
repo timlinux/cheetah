@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/timlinux/blockfont"
 	"github.com/timlinux/cheetah/backend"
-	"github.com/timlinux/cheetah/font"
 )
 
 // ProgressBarInfo stores the position and dimensions of the progress bar
@@ -102,11 +102,11 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 	displayWord := strings.ToLower(currentWord)
 
 	// Render current word using custom block font
-	letterLines := font.RenderWord(displayWord)
+	letterLines := blockfont.RenderWord(displayWord)
 
 	// Build the block letter display
 	var blockLetterLines []string
-	for lineIdx := 0; lineIdx < font.LetterHeight; lineIdx++ {
+	for lineIdx := 0; lineIdx < blockfont.LetterHeight; lineIdx++ {
 		var lineBuilder strings.Builder
 		for charIdx, letterLine := range letterLines[lineIdx] {
 			style := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourWord))

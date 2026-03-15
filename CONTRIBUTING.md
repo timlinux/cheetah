@@ -26,7 +26,7 @@ cheetah/
 ├── backend/        # Go REST API server
 ├── documents/      # Document parsers (PDF, DOCX, EPUB, ODT, TXT, MD)
 ├── frontend/       # Bubble Tea TUI
-├── font/           # Block letter rendering
+├── (uses: github.com/timlinux/blockfont)  # Block letter rendering
 ├── sessions/       # Position persistence
 ├── settings/       # User preferences
 ├── web/            # React web frontend

@@ -14,7 +14,7 @@ main.go
 │   └── server.go    → backend/api
 ├── frontend/
 │   ├── model.go     → backend/, documents/, bubbles/filepicker
-│   ├── views.go     → backend/, font/
+│   ├── views.go     → backend/, blockfont (external)
 │   ├── client.go    → backend/
 │   ├── styles.go    → lipgloss
 │   └── animations.go → harmonica
@@ -26,8 +26,7 @@ main.go
 │   ├── docx.go      → nguyenthenguyen/docx
 │   ├── epub.go      → taylorskalyo/goreader
 │   └── odt.go       → archive/zip, encoding/xml
-├── font/
-│   └── font.go      → (block letter definitions)
+├── (external: github.com/timlinux/blockfont)
 ├── sessions/
 │   └── sessions.go  → (JSON persistence)
 └── settings/
@@ -201,20 +200,24 @@ main.go
 
 ---
 
-### `font/`
+### External: `github.com/timlinux/blockfont`
 
-**Purpose:** Block letter rendering for TUI
-
-#### `font/font.go`
+**Purpose:** Block letter rendering for TUI (external dependency)
 
 **Contents:**
 - `BlockLetters` map - 6-line tall block letter definitions
-- Uses Unicode block elements: █ ▀ ▄ ▌ ▐
-- Supports a-z, punctuation (. , ; : ! ?)
+- Uses Unicode block elements: █ ◢ ◣ ◤ ◥
+- Supports a-z, A-Z, 0-9, punctuation
 
 **Key Functions:**
 - `RenderWord(word)` - Render word as block letters
+- `RenderText(text)` - Render text with line breaks
 - `GetLetterWidth(char)` - Get width of letter
+- `GetTotalWidth(word)` - Get total width of word
+
+**Key Constants:**
+- `LetterHeight` - Height of block letters (6 lines)
+- `LetterSpacing` - Spacing between letters
 
 ---
 
@@ -360,7 +363,12 @@ main.go
 | `charmbracelet/bubbletea` | TUI framework (Elm architecture) |
 | `charmbracelet/lipgloss` | Styling and layout |
 | `charmbracelet/harmonica` | Spring physics animations |
-| `charmbracelet/bubbles` | Pre-built TUI components |
+
+### Block Font Rendering
+
+| Package | Purpose |
+|---------|---------|
+| `timlinux/blockfont` | Unicode block letter rendering for TUI |
 
 ### Document Parsers
 
