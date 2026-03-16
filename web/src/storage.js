@@ -148,13 +148,15 @@ export async function createOrUpdateSession(content, title, totalWords, position
 export function getSettings() {
   try {
     const data = localStorage.getItem(SETTINGS_KEY);
-    return data ? JSON.parse(data) : {
+    const defaults = {
       defaultWpm: 300,
       showAds: true,
+      displayAllCaps: true, // All caps enabled by default
     };
+    return data ? { ...defaults, ...JSON.parse(data) } : defaults;
   } catch (e) {
     console.error('Error reading settings:', e);
-    return { defaultWpm: 300, showAds: true };
+    return { defaultWpm: 300, showAds: true, displayAllCaps: true };
   }
 }
 

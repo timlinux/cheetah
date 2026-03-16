@@ -12,6 +12,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/timlinux/cheetah/backend"
+	"github.com/timlinux/cheetah/sessions"
+	"github.com/timlinux/cheetah/settings"
 )
 
 // AppState represents the current state of the application UI
@@ -150,8 +152,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.loadError = ""
 			m.state = StateReading
-			// Set initial WPM
-			if m.initialWPM > 0 {
+
+			// Check if there's a saved session for this document
+			docInfo, err := m.engine.GetDocumentInfo()
+			if err == nil && docInfo != nil && docInfo.Hash != "" {
+				session, err := sessions.Load(docInfo.Hash)
+				if err == nil && session != nil {
+					// Restore saved position and WPM
+					m.engine.JumpToWord(session.LastPosition)
+					if session.LastWPM > 0 {
+						m.engine.SetWPM(session.LastWPM)
+					}
+				} else if m.initialWPM > 0 {
+					// No saved session, use initial WPM if provided
+					m.engine.SetWPM(m.initialWPM)
+				}
+			} else if m.initialWPM > 0 {
+				// Couldn't get document info, use initial WPM if provided
 				m.engine.SetWPM(m.initialWPM)
 			}
 		}
@@ -717,6 +734,10 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.wasPausedBeforeDrag = true
 			}
+
+		case "c", "C":
+			// Toggle all caps display
+			_, _ = settings.ToggleAllCaps()
 		}
 
 	case tea.KeyLeft:

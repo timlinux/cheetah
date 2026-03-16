@@ -3,7 +3,16 @@
     "allow": [
       "WebSearch",
       "Bash(pkill:*)",
-      "Bash(nix develop --command bash -c \"./cheetah 2>&1 &\")"
+      "Bash(nix develop --command bash -c \"./cheetah 2>&1 &\")",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(go get:*)",
+      "Bash(GOPRIVATE=github.com/timlinux go get:*)",
+      "Bash(GOPRIVATE=github.com/timlinux go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(GOPRIVATE=github.com/timlinux go mod vendor:*)",
+      "Bash(go test:*)"
     ]
   }
 }

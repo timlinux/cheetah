@@ -72,8 +72,11 @@ RSVP is a speed reading technique where:
 **US-003: Drag-and-drop document (Web)**
 > As a web user, I want to drag and drop a document onto the interface, so I can quickly start reading.
 
-**US-004: Resume reading**
-> As a user, I want to resume reading a previously opened document from where I left off.
+**US-004: Resume reading from resume list**
+> As a user, I want to resume reading a previously opened document from where I left off using the resume list.
+
+**US-005: Auto-resume from file picker**
+> As a TUI user, when I open a document from the file picker that I have previously read, I want to automatically resume from my last position and speed setting.
 
 ### 3.2 Reading Controls
 
@@ -103,13 +106,16 @@ RSVP is a speed reading technique where:
 **US-023: Status display**
 > As a user, I want to see the current WPM, play/pause status, and paragraph position.
 
-**US-024: Interactive scrubber (TUI)**
+**US-024: All caps display toggle**
+> As a user, I want a toggle to display words in all capital letters or normal case, with all caps enabled by default.
+
+**US-025: Interactive scrubber (TUI)**
 > As a TUI user, I want to click or drag on the progress bar to jump to any position in the document.
 
-**US-025: Interactive scrubber (Web)**
+**US-026: Interactive scrubber (Web)**
 > As a web user, I want to use a slider to scrub through the document to any position.
 
-**US-026: Go-to percentage**
+**US-027: Go-to percentage**
 > As a user, I want to press 'g' and enter a percentage to jump directly to that position in the document.
 
 ### 3.4 Persistence
@@ -173,6 +179,9 @@ RSVP is a speed reading technique where:
 | FR-032 | System SHALL save last access timestamp |
 | FR-033 | System SHALL identify documents by content hash |
 | FR-034 | System SHALL list all saved sessions sorted by last access |
+| FR-035 | System SHALL auto-resume position and WPM when opening previously read document from file picker (TUI) |
+| FR-036 | System SHALL provide toggle for all caps display (default: enabled) |
+| FR-037 | System SHALL persist all caps preference in settings |
 
 ### 4.5 TUI Controls
 
@@ -185,6 +194,7 @@ RSVP is a speed reading technique where:
 | **l / Down Arrow** | Next paragraph |
 | **1-9** | Speed presets (1=200, 2=300, ..., 9=1000 WPM) |
 | **g** | Go-to mode (enter percentage to jump) |
+| **c** | Toggle all caps display |
 | **r** | Return to start of document |
 | **s** | Save position |
 | **Escape** | Return to document picker |
@@ -334,7 +344,7 @@ POST /api/v1/saved/{hash}/resume
 │                    ⏸ PAUSED │ 350 WPM │ ¶ 45/200                     │
 │                                                                      │
 ├─────────────────────────────────────────────────────────────────────┤
-│ SPACE pause │ j/k speed │ h/l paragraph │ 1-9 presets │ ESC back    │
+│ SPACE pause │ j/k speed │ h/l para │ 1-9 presets │ c caps │ ESC back  │
 │ Made with ♥ by Kartoza │ Donate! │ GitHub                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```

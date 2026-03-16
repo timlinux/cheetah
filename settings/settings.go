@@ -36,6 +36,10 @@ type Settings struct {
 
 	// LastDirectory is the last directory visited in the file picker
 	LastDirectory string `json:"last_directory"`
+
+	// DisableAllCaps disables displaying words in all capital letters when true
+	// Default is false (all caps enabled)
+	DisableAllCaps bool `json:"disable_all_caps"`
 }
 
 var (
@@ -63,6 +67,7 @@ func DefaultSettings() *Settings {
 		NextWordsCount:   3,
 		AutoSave:         true,
 		AutoSaveInterval: 50, // Every 50 words
+		DisableAllCaps:   false, // All caps enabled by default
 	}
 }
 
@@ -158,4 +163,30 @@ func SetSettingsPath(path string) {
 func Reset() error {
 	settings := DefaultSettings()
 	return settings.Save()
+}
+
+// IsAllCapsEnabled returns true if all caps display is enabled
+func IsAllCapsEnabled() bool {
+	s, err := Load()
+	if err != nil {
+		return true // Default to enabled
+	}
+	return !s.DisableAllCaps
+}
+
+// ToggleAllCaps toggles the all caps setting and returns the new state
+func ToggleAllCaps() (bool, error) {
+	s, err := Load()
+	if err != nil {
+		return true, err
+	}
+	s.DisableAllCaps = !s.DisableAllCaps
+	if err := s.Save(); err != nil {
+		return !s.DisableAllCaps, err
+	}
+	// Clear cache to force reload
+	mu.Lock()
+	cache = nil
+	mu.Unlock()
+	return !s.DisableAllCaps, nil
 }

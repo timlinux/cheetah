@@ -15,6 +15,9 @@ type EngineAdapter interface {
 	// GetState returns the current reading state
 	GetState() (*backend.ReadingState, error)
 
+	// GetDocumentInfo returns metadata about the loaded document
+	GetDocumentInfo() (*backend.DocumentInfo, error)
+
 	// Play starts reading
 	Play() error
 
@@ -74,6 +77,11 @@ func (e *EmbeddedEngine) LoadDocument(path string) error {
 func (e *EmbeddedEngine) GetState() (*backend.ReadingState, error) {
 	state := e.engine.GetState()
 	return &state, nil
+}
+
+// GetDocumentInfo returns metadata about the loaded document
+func (e *EmbeddedEngine) GetDocumentInfo() (*backend.DocumentInfo, error) {
+	return e.engine.GetDocumentInfo(), nil
 }
 
 // Play starts reading

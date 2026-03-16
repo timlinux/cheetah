@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/timlinux/blockfont"
 	"github.com/timlinux/cheetah/backend"
+	"github.com/timlinux/cheetah/settings"
 )
 
 // ProgressBarInfo stores the position and dimensions of the progress bar
@@ -98,7 +99,10 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		currentWord = "..."
 	}
 
-	// Convert to lowercase for block font rendering
+	// Check if all caps display is enabled
+	allCapsEnabled := settings.IsAllCapsEnabled()
+
+	// Convert to lowercase for block font rendering (block font only supports lowercase)
 	displayWord := strings.ToLower(currentWord)
 
 	// Render current word using custom block font
@@ -143,7 +147,11 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		prevStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel))).
 			Italic(true)
-		prevWordDisplay = prevStyle.Render("· · · " + state.PreviousWord + " · · ·")
+		prevWord := state.PreviousWord
+		if allCapsEnabled {
+			prevWord = strings.ToUpper(prevWord)
+		}
+		prevWordDisplay = prevStyle.Render("· · · " + prevWord + " · · ·")
 	}
 
 	// Next words display (up to 3, with decreasing opacity)
@@ -160,10 +168,14 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		nextStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel))).
 			Align(lipgloss.Center)
+		displayNextWord := word
+		if allCapsEnabled {
+			displayNextWord = strings.ToUpper(word)
+		}
 		if i == 0 {
-			nextWordsDisplay = append(nextWordsDisplay, nextStyle.Render("▼  "+word+"  ▼"))
+			nextWordsDisplay = append(nextWordsDisplay, nextStyle.Render("▼  "+displayNextWord+"  ▼"))
 		} else {
-			nextWordsDisplay = append(nextWordsDisplay, nextStyle.Render(word))
+			nextWordsDisplay = append(nextWordsDisplay, nextStyle.Render(displayNextWord))
 		}
 	}
 
@@ -217,7 +229,11 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 	carouselElements = append(carouselElements, coloredWord)
 	// Show original word below block letters for clarity
 	originalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Align(lipgloss.Center)
-	carouselElements = append(carouselElements, originalStyle.Render(currentWord))
+	displayCurrentWord := currentWord
+	if allCapsEnabled {
+		displayCurrentWord = strings.ToUpper(currentWord)
+	}
+	carouselElements = append(carouselElements, originalStyle.Render(displayCurrentWord))
 
 	// Decorative separator
 	carouselElements = append(carouselElements, "")
@@ -329,7 +345,7 @@ func (r *Renderer) renderFullScreen(content, title string, width, height int) st
 	header := lipgloss.PlaceHorizontal(width, lipgloss.Center, headerStyle.Render(headerText))
 
 	// Help text
-	helpText := "SPACE pause │ r restart │ j/k speed │ h/l paragraph │ 1-9 presets │ g goto │ s save │ ESC back │ q quit"
+	helpText := "SPACE pause │ r restart │ j/k speed │ h/l paragraph │ 1-9 presets │ g goto │ c caps │ s save │ ESC back │ q quit"
 
 	// Kartoza branding with proper colors
 	kartozaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))

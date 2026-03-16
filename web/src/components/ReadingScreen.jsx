@@ -23,9 +23,11 @@ import {
   ModalFooter,
   Input,
   Button,
+  Switch,
   useDisclosure,
 } from '@chakra-ui/react';
 import AdSense from './AdSense.jsx';
+import { getSettings, saveSettings } from '../storage.js';
 
 // WPM Speed display bar
 function WpmBar({ wpm, onWpmChange }) {
@@ -200,6 +202,12 @@ function ReadingScreen({
   const [currentListNumber, setCurrentListNumber] = useState(null);
   const timerRef = useRef(null);
 
+  // All caps display setting (default: on)
+  const [displayAllCaps, setDisplayAllCaps] = useState(() => {
+    const settings = getSettings();
+    return settings.displayAllCaps !== false; // Default to true if not set
+  });
+
   // Go-to modal state
   const { isOpen: isGotoOpen, onOpen: onGotoOpen, onClose: onGotoClose } = useDisclosure();
   const [gotoInput, setGotoInput] = useState('');
@@ -354,6 +362,15 @@ function ReadingScreen({
     setIsPaused(true);
   }, []);
 
+  // Toggle all caps display
+  const toggleAllCaps = useCallback(() => {
+    setDisplayAllCaps(prev => {
+      const newValue = !prev;
+      saveSettings({ displayAllCaps: newValue });
+      return newValue;
+    });
+  }, []);
+
   // Open go-to modal
   const openGotoModal = useCallback(() => {
     setWasPausedBeforeGoto(isPaused);
@@ -471,6 +488,11 @@ function ReadingScreen({
             openGotoModal();
           }
           break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          toggleAllCaps();
+          break;
         default:
           break;
       }
@@ -478,7 +500,7 @@ function ReadingScreen({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, wpm, words, onExit, onSavePosition, returnToStart, isGotoOpen, openGotoModal]);
+  }, [currentIndex, wpm, words, onExit, onSavePosition, returnToStart, isGotoOpen, openGotoModal, toggleAllCaps]);
 
   return (
     <Flex minH="100vh" direction="column" overflow="hidden">
@@ -536,6 +558,15 @@ function ReadingScreen({
           >
             ↺ Restart
           </Box>
+          <HStack spacing={2} px={3} py={2} bg="gray.700" borderRadius="lg" h="40px">
+            <Text fontSize="xs" color="gray.400">CAPS</Text>
+            <Switch
+              size="sm"
+              colorScheme="brand"
+              isChecked={displayAllCaps}
+              onChange={toggleAllCaps}
+            />
+          </HStack>
           <VStack spacing={0} minW="100px">
             <Text color="gray.400" fontSize="xs">Word</Text>
             <Text color="white" fontSize="lg" fontWeight="bold">
@@ -625,6 +656,7 @@ function ReadingScreen({
             letterSpacing="0.01em"
             lineHeight="1.1"
             userSelect="none"
+            textTransform={displayAllCaps ? 'uppercase' : 'none'}
           >
             {currentWord}
           </Text>
@@ -669,6 +701,8 @@ function ReadingScreen({
           <Text><b>1-9</b> presets</Text>
           <Text>|</Text>
           <Text><b>g</b> goto</Text>
+          <Text>|</Text>
+          <Text><b>c</b> caps</Text>
           <Text>|</Text>
           <Text><b>ESC/b</b> back</Text>
         </HStack>
