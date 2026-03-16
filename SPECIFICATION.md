@@ -22,6 +22,7 @@ RSVP is a speed reading technique where:
 
 - **TUI**: Cross-platform terminal interface (Linux, macOS, Windows)
 - **Web**: Browser-based interface (Chrome, Firefox, Safari, Edge)
+- **iOS**: Native iPhone and iPad app (Swift + SwiftUI, iOS 16+)
 
 ---
 
@@ -30,14 +31,14 @@ RSVP is a speed reading technique where:
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │                         FRONTEND LAYER                              │
-├──────────────────────────┬─────────────────────────────────────────┤
-│ Terminal UI (TUI)        │ Web UI                                  │
-│ (Bubble Tea + Lipgloss)  │ (React + Chakra UI + Framer Motion)    │
-│ - File picker            │ - Drag-drop document upload             │
-│ - Large block word       │ - Large animated word display           │
-│ - Speed/pause controls   │ - Client-side document parsing          │
-│                          │ - localStorage persistence              │
-├──────────────────────────┴─────────────────────────────────────────┤
+├──────────────────────────┬──────────────────────┬──────────────────┤
+│ Terminal UI (TUI)        │ Web UI               │ iOS (SwiftUI)   │
+│ (Bubble Tea + Lipgloss)  │ (React + Chakra UI + │ - UIDocumentPicker│
+│ - File picker            │  Framer Motion)      │ - RSVP reader    │
+│ - Large block word       │ - Drag-drop upload   │ - Speed controls │
+│ - Speed/pause controls   │ - Animated word view │ - Dark-mode UI   │
+│                          │ - localStorage save  │ - UserDefaults   │
+├──────────────────────────┴──────────────────────┴──────────────────┤
 │                    REST API (JSON over HTTP)                        │
 ├────────────────────────────────────────────────────────────────────┤
 │                    GO BACKEND SERVER                                │
@@ -56,6 +57,7 @@ RSVP is a speed reading technique where:
 | REST API | Expose engine functionality via HTTP |
 | TUI Frontend | Terminal-based user interface |
 | Web Frontend | Browser-based user interface |
+| iOS Frontend | Native iPhone/iPad user interface (Swift + SwiftUI) |
 
 ---
 

@@ -139,6 +139,56 @@ make run
 make web-dev
 ```
 
+## iOS App
+
+The `ios/` directory contains a native Swift + SwiftUI app for iPhone and iPad.
+
+### Features
+
+The iOS app provides the same RSVP reading experience as the web and TUI:
+
+- **RSVP Reading** – Words displayed one at a time with large typography
+- **Multi-Format** – PDF (PDFKit), DOCX, EPUB, ODT, TXT, Markdown
+- **Speed Control** – 50–2000 WPM slider with ±50 WPM buttons
+- **Speed Presets** – 9 preset buttons (200–1000 WPM), matching TUI keys 1–9
+- **Smart Pausing** – Extra delay after sentence/clause punctuation
+- **Context Words** – Previous word and up to 5 next words for comprehension
+- **Progress Scrubber** – Drag the progress bar to jump anywhere in the document
+- **Go-to Mode** – Jump directly to a percentage of the document
+- **Paragraph Navigation** – Skip forward/back by paragraph
+- **Auto-Save** – Position saved automatically every N words
+- **Resume Reading** – Reopen the same document to continue where you left off
+- **Settings** – Configurable defaults for WPM, context words, auto-save interval
+- **Dark Mode** – Full dark UI matching the web/TUI aesthetic
+
+### Requirements
+
+- Xcode 15+
+- iOS 16+ deployment target
+- Swift 5.9+
+
+### Building
+
+```bash
+# Open in Xcode
+open ios/Cheetah.xcodeproj
+
+# Or build from command line (requires macOS + Xcode)
+xcodebuild -project ios/Cheetah.xcodeproj \
+           -scheme Cheetah \
+           -destination 'platform=iOS Simulator,name=iPhone 15' \
+           build
+```
+
+### Testing
+
+```bash
+xcodebuild -project ios/Cheetah.xcodeproj \
+           -scheme CheetahTests \
+           -destination 'platform=iOS Simulator,name=iPhone 15' \
+           test
+```
+
 ### Documentation
 
 ```bash
@@ -157,7 +207,8 @@ cheetah/
 ├── (uses: github.com/timlinux/blockfont)  # Block letter rendering
 ├── sessions/         # Position persistence
 ├── settings/         # User preferences
-└── web/              # Web frontend (React)
+├── web/              # Web frontend (React)
+└── ios/              # Native iOS app (Swift + SwiftUI)
 ```
 
 See [PACKAGES.md](PACKAGES.md) for detailed architecture.
