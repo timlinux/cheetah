@@ -289,7 +289,7 @@ private final class ODTXMLExtractor: NSObject, XMLParserDelegate {
 enum HTMLTextExtractor {
 
     static func extract(from data: Data) -> String {
-        // First try NSAttributedString-based extraction (cleanest)
+        // Try structured extraction first (removes script/style, strips tags)
         if let text = attributedStringExtract(from: data) { return text }
 
         // Fallback: simple tag stripper
@@ -300,12 +300,11 @@ enum HTMLTextExtractor {
     }
 
     private static func attributedStringExtract(from data: Data) -> String? {
-        // Use NSAttributedString HTML init (main-thread only; safe here as we call on background)
         guard let html = String(data: data, encoding: .utf8) else { return nil }
-        // Remove script/style before extraction
+        // Remove script/style blocks, then strip remaining tags
         let cleaned = removeScriptStyle(from: html)
         let stripped = stripTags(from: cleaned)
-        // Collapse extra whitespace
+        // Collapse extra whitespace and empty lines
         return stripped.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
