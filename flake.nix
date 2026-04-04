@@ -130,7 +130,7 @@
             pname = "cheetah";
             version = "0.3.0";
             src = ./.;
-            vendorHash = "sha256-6xoFDUOvYBku2t+O+8U9cSlyk9nkpNiaKw4aJ2HXsw8=";
+            vendorHash = "sha256-SxsSrwDHkFz9HDM5Gg+XXVZtu9JdBAWwajZU7/EXuj8=";
 
             meta = with pkgs.lib; {
               description = "RSVP Speed Reading Application - read at 1000+ WPM";

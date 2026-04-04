@@ -32,6 +32,9 @@ type tickMsg time.Time
 // animTickMsg is sent to update animations
 type animTickMsg time.Time
 
+// distractionFadeTickMsg is sent to update distraction-free fade animation
+type distractionFadeTickMsg time.Time
+
 // stateUpdateMsg is sent when the backend state changes
 type stateUpdateMsg backend.ReadingState
 
@@ -76,6 +79,11 @@ type Model struct {
 	gotoMode   bool   // Whether user is in go-to mode (typing percentage)
 	gotoInput  string // Current input for go-to mode
 
+	// Distraction-free mode state
+	lastKeyboardActivity    time.Time // When the last keyboard activity occurred
+	distractionFreeOpacity  float64   // Opacity of non-essential UI elements (1.0 = visible, 0.0 = hidden)
+	distractionFadeActive   bool      // Whether the fade animation is currently running
+
 	// Settings
 	settingsCursor int
 }
@@ -95,14 +103,16 @@ func NewModel(documentPath string, initialWPM int) Model {
 	}
 
 	return Model{
-		engine:       engine,
-		state:        initialState,
-		renderer:     NewRenderer(80, 24),
-		animator:     NewWordAnimator(),
-		fileBrowser:  fb,
-		initialPath:  documentPath,
-		initialWPM:   initialWPM,
-		readingState: &backend.ReadingState{IsPaused: true, WPM: initialWPM},
+		engine:                 engine,
+		state:                  initialState,
+		renderer:               NewRenderer(80, 24),
+		animator:               NewWordAnimator(),
+		fileBrowser:            fb,
+		initialPath:            documentPath,
+		initialWPM:             initialWPM,
+		readingState:           &backend.ReadingState{IsPaused: true, WPM: initialWPM},
+		lastKeyboardActivity:   time.Now(),
+		distractionFreeOpacity: 1.0,
 	}
 }
 
@@ -116,14 +126,16 @@ func NewModelWithEngine(engine EngineAdapter, documentPath string, initialWPM in
 	}
 
 	return Model{
-		engine:       engine,
-		state:        initialState,
-		renderer:     NewRenderer(80, 24),
-		animator:     NewWordAnimator(),
-		fileBrowser:  fb,
-		initialPath:  documentPath,
-		initialWPM:   initialWPM,
-		readingState: &backend.ReadingState{IsPaused: true, WPM: initialWPM},
+		engine:                 engine,
+		state:                  initialState,
+		renderer:               NewRenderer(80, 24),
+		animator:               NewWordAnimator(),
+		fileBrowser:            fb,
+		initialPath:            documentPath,
+		initialWPM:             initialWPM,
+		readingState:           &backend.ReadingState{IsPaused: true, WPM: initialWPM},
+		lastKeyboardActivity:   time.Now(),
+		distractionFreeOpacity: 1.0,
 	}
 }
 
@@ -196,6 +208,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.animator.IsAnimating {
 				return m, animTickCmd()
 			}
+		}
+		return m, nil
+
+	case distractionFadeTickMsg:
+		// Handle distraction-free fade animation during play mode
+		if m.state == StateReading && m.readingState != nil && !m.readingState.IsPaused {
+			elapsed := time.Since(m.lastKeyboardActivity)
+
+			// Distraction-free timing constants
+			const fadeStartDelay = 2 * time.Second   // Start fading after 2 seconds of inactivity
+			const fadeDuration = 3 * time.Second     // Complete fade over 3 seconds
+
+			if elapsed < fadeStartDelay {
+				// Before fade starts, keep fully visible
+				m.distractionFreeOpacity = 1.0
+			} else {
+				// Calculate fade progress (0.0 to 1.0)
+				fadeElapsed := elapsed - fadeStartDelay
+				fadeProgress := float64(fadeElapsed) / float64(fadeDuration)
+				if fadeProgress > 1.0 {
+					fadeProgress = 1.0
+				}
+				// Opacity goes from 1.0 to 0.0
+				m.distractionFreeOpacity = 1.0 - fadeProgress
+			}
+
+			// Continue fade animation while playing
+			m.distractionFadeActive = true
+			return m, distractionFadeTickCmd()
+		} else {
+			// Not in play mode or paused - restore full visibility
+			m.distractionFreeOpacity = 1.0
+			m.distractionFadeActive = false
 		}
 		return m, nil
 
@@ -307,8 +352,8 @@ func (m Model) View() string {
 		if m.loadError != "" {
 			return m.renderer.RenderError(m.loadError, m.width, m.height)
 		}
-		// Render reading screen
-		baseView := m.renderer.RenderReadingScreen(m.readingState, m.animator, m.width, m.height)
+		// Render reading screen with distraction-free opacity
+		baseView := m.renderer.RenderReadingScreen(m.readingState, m.animator, m.width, m.height, m.distractionFreeOpacity)
 
 		// Overlay go-to input if in go-to mode
 		if m.gotoMode {
@@ -651,9 +696,24 @@ func (m Model) handleResumeListInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleReadingInput processes keyboard input during reading
 func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Reset keyboard activity time on any key press (for distraction-free mode)
+	m.lastKeyboardActivity = time.Now()
+	m.distractionFreeOpacity = 1.0
+
+	// Start fade timer if not already running and playing
+	var fadeCmd tea.Cmd
+	if !m.distractionFadeActive && m.readingState != nil && !m.readingState.IsPaused {
+		fadeCmd = distractionFadeTickCmd()
+		m.distractionFadeActive = true
+	}
+
 	// Handle go-to mode input
 	if m.gotoMode {
-		return m.handleGotoModeInput(msg)
+		newModel, cmd := m.handleGotoModeInput(msg)
+		if fadeCmd != nil {
+			return newModel, tea.Batch(cmd, fadeCmd)
+		}
+		return newModel, cmd
 	}
 
 	switch msg.Type {
@@ -671,7 +731,14 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeySpace:
 		// Toggle play/pause
 		m.engine.Toggle()
-		return m, nil
+		// After toggling, check if we're now playing and start fade timer
+		// We need to wait for state to update, so start timer regardless
+		// (it will check play state and do nothing if paused)
+		if !m.distractionFadeActive {
+			m.distractionFadeActive = true
+			return m, distractionFadeTickCmd()
+		}
+		return m, fadeCmd
 
 	case tea.KeyRunes:
 		char := string(msg.Runes)
@@ -769,7 +836,7 @@ func (m Model) handleReadingInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.engine.NextParagraph()
 	}
 
-	return m, nil
+	return m, fadeCmd
 }
 
 // handleGotoModeInput handles keyboard input when in go-to percentage mode
@@ -889,5 +956,12 @@ func tickCmd() tea.Cmd {
 func animTickCmd() tea.Cmd {
 	return tea.Tick(GetAnimationInterval(), func(t time.Time) tea.Msg {
 		return animTickMsg(t)
+	})
+}
+
+// distractionFadeTickCmd returns a command for distraction-free fade animation
+func distractionFadeTickCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return distractionFadeTickMsg(t)
 	})
 }

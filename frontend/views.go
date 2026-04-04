@@ -89,7 +89,8 @@ func (r *Renderer) CalculateWordIndexFromClick(clickX, clickY int) int {
 }
 
 // RenderReadingScreen renders the main RSVP reading interface
-func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *WordAnimator, width, height int) string {
+// distractionFreeOpacity controls the visibility of non-essential UI elements (1.0 = fully visible, 0.0 = hidden)
+func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *WordAnimator, width, height int, distractionFreeOpacity float64) string {
 	if state == nil || !state.DocumentLoaded {
 		return r.RenderLoading(width, height)
 	}
@@ -129,8 +130,9 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 
 	coloredWord := strings.Join(blockLetterLines, "\n")
 
-	// Progress indicator
-	progress := fmt.Sprintf("Word %d / %d", state.WordIndex+1, state.TotalWords)
+	// Progress indicator (fades with distraction-free mode)
+	progressText := fmt.Sprintf("Word %d / %d", state.WordIndex+1, state.TotalWords)
+	progress := applyOpacity(r.styles.Progress.Render(progressText), distractionFreeOpacity)
 
 	// Get animation values (default to fully visible if no animator)
 	prevOpacity := 0.5
@@ -142,10 +144,12 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		nextOpacity = animator.GetNextOpacity()
 	}
 
-	// Previous word display (animated opacity)
+	// Previous word display (animated opacity + distraction-free fade)
 	prevWordDisplay := ""
 	if state.PreviousWord != "" {
-		greyLevel := 232 + int(prevOpacity*23)
+		// Combine animation opacity with distraction-free opacity
+		combinedOpacity := prevOpacity * distractionFreeOpacity
+		greyLevel := 232 + int(combinedOpacity*23)
 		if greyLevel > 255 {
 			greyLevel = 255
 		}
@@ -159,12 +163,13 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		prevWordDisplay = prevStyle.Render("· · · " + prevWord + " · · ·")
 	}
 
-	// Next words display (up to 3, with decreasing opacity)
+	// Next words display (up to 3, with decreasing opacity + distraction-free fade)
 	var nextWordsDisplay []string
 	for i, word := range state.NextWords {
-		wordOpacity := nextOpacity * (1.0 - float64(i)*0.2)
-		if wordOpacity < 0.2 {
-			wordOpacity = 0.2
+		// Combine animation opacity with distraction-free opacity
+		wordOpacity := nextOpacity * (1.0 - float64(i)*0.2) * distractionFreeOpacity
+		if wordOpacity < 0.2*distractionFreeOpacity {
+			wordOpacity = 0.2 * distractionFreeOpacity
 		}
 		greyLevel := 232 + int(wordOpacity*23)
 		if greyLevel > 255 {
@@ -184,21 +189,22 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		}
 	}
 
-	// Progress bar
-	progressBar := r.renderProgressBar(state.Progress, state.WPM, state.TotalWords)
+	// Progress bar (fades with distraction-free mode)
+	progressBar := r.renderProgressBar(state.Progress, state.WPM, state.TotalWords, distractionFreeOpacity)
 
-	// Status indicator
+	// Status indicator (fades with distraction-free mode)
 	var statusIndicator string
 	if state.IsPaused {
 		statusIndicator = r.styles.Paused.Render("⏸ PAUSED")
 	} else {
 		statusIndicator = r.styles.Playing.Render("▶ PLAYING")
 	}
-	statusLine := fmt.Sprintf("%s │ %d WPM │ ¶ %d/%d",
+	statusLineText := fmt.Sprintf("%s │ %d WPM │ ¶ %d/%d",
 		statusIndicator,
 		state.WPM,
 		state.ParagraphIndex+1,
 		state.TotalParagraphs)
+	statusLine := applyOpacity(statusLineText, distractionFreeOpacity)
 
 	// Build the carousel layout
 	var carouselElements []string
@@ -220,8 +226,15 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 		carouselElements = append(carouselElements, "")
 	}
 
-	// Decorative separator
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	// Decorative separator (fades with distraction-free mode)
+	// Use greyscale 232-238 for separator (darker range)
+	var separatorStyle lipgloss.Style
+	if distractionFreeOpacity <= 0.05 {
+		separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+	} else {
+		separatorGreyLevel := 232 + int(distractionFreeOpacity*6) // 232 to 238
+		separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", separatorGreyLevel)))
+	}
 	carouselElements = append(carouselElements, separatorStyle.Render("─────────────────────────────────"))
 
 	// Offset for current word animation
@@ -285,7 +298,7 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 	// X position = center of screen minus half the progress bar width
 	r.progressBarInfo.X = (width - ProgressBarWidth) / 2
 
-	return r.renderFullScreen(mainContent, state.DocumentTitle, width, height)
+	return r.renderFullScreen(mainContent, state.DocumentTitle, width, height, distractionFreeOpacity)
 }
 
 // ProgressBarWidth is the width of the progress bar in characters
@@ -293,7 +306,8 @@ const ProgressBarWidth = 50
 
 // renderProgressBar creates a progress bar for the reading progress
 // It also stores the bar position for mouse interaction
-func (r *Renderer) renderProgressBar(progress float64, wpm int, totalWords int) string {
+// opacity controls the visibility (1.0 = fully visible, 0.0 = hidden)
+func (r *Renderer) renderProgressBar(progress float64, wpm int, totalWords int, opacity float64) string {
 	if progress < 0 {
 		progress = 0
 	}
@@ -306,26 +320,53 @@ func (r *Renderer) renderProgressBar(progress float64, wpm int, totalWords int) 
 
 	var bar strings.Builder
 
-	// Build the filled portion with gradient
+	// Build the filled portion with gradient (faded by opacity)
+	// Use greyscale 232-255 for fading (232=dark, 255=light)
 	for i := 0; i < filledWidth; i++ {
 		colourIdx := int(float64(i) / float64(ProgressBarWidth) * float64(len(GradientColours)-1))
 		if colourIdx >= len(GradientColours) {
 			colourIdx = len(GradientColours) - 1
 		}
 		colour := GradientColours[colourIdx]
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color(colour))
+		var style lipgloss.Style
+		if opacity >= 0.9 {
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color(colour))
+		} else if opacity <= 0.05 {
+			// Nearly invisible
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+		} else {
+			// Fade to greyscale: 232 (dark) to ~245 (medium grey)
+			greyLevel := 232 + int(opacity*13)
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel)))
+		}
 		bar.WriteString(style.Render("█"))
 	}
 
-	// Build the empty portion
-	emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourEmptyBar))
+	// Build the empty portion (faded by opacity)
+	// Empty bar uses darker greyscale: 232-236
+	var emptyStyle lipgloss.Style
+	if opacity <= 0.05 {
+		emptyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+	} else {
+		emptyGreyLevel := 232 + int(opacity*4) // 232 to 236
+		emptyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", emptyGreyLevel)))
+	}
 	for i := 0; i < emptyWidth; i++ {
 		bar.WriteString(emptyStyle.Render("░"))
 	}
 
-	// Progress percentage
+	// Progress percentage (faded by opacity)
 	percentLabel := fmt.Sprintf(" %.1f%%", progress*100)
-	percentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourProgress))
+	var percentStyle lipgloss.Style
+	if opacity >= 0.9 {
+		percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ColourProgress))
+	} else if opacity <= 0.05 {
+		percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+	} else {
+		// Greyscale: 232 (dark) to 250 (light grey)
+		percentGreyLevel := 232 + int(opacity*18)
+		percentStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", percentGreyLevel)))
+	}
 
 	// Store progress bar info for mouse interaction
 	// The X position will be calculated when we know where it's centered
@@ -340,19 +381,47 @@ func (r *Renderer) renderProgressBar(progress float64, wpm int, totalWords int) 
 }
 
 // renderFullScreen renders content with header and footer
-func (r *Renderer) renderFullScreen(content, title string, width, height int) string {
-	// Header with Kartoza orange
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourKartozaOrange)).Bold(true)
+// opacity controls the visibility of header and help text (1.0 = fully visible, 0.0 = hidden)
+// Kartoza branding always remains visible (ads should stay visible per requirement)
+func (r *Renderer) renderFullScreen(content, title string, width, height int, opacity float64) string {
+	// Header with Kartoza orange (fades with distraction-free mode)
+	// Use greyscale 232-255 for proper fading (232=near-black, 255=white)
+	var header string
 	headerText := "🐆 CHEETAH"
 	if title != "" {
 		headerText = fmt.Sprintf("🐆 CHEETAH - %s", title)
 	}
-	header := lipgloss.PlaceHorizontal(width, lipgloss.Center, headerStyle.Render(headerText))
+	if opacity >= 0.9 {
+		headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourKartozaOrange)).Bold(true)
+		header = lipgloss.PlaceHorizontal(width, lipgloss.Center, headerStyle.Render(headerText))
+	} else if opacity <= 0.05 {
+		// Nearly invisible - use darkest grey
+		headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+		header = lipgloss.PlaceHorizontal(width, lipgloss.Center, headerStyle.Render(headerText))
+	} else {
+		// Faded header using greyscale: 232 (dark) to 250 (light)
+		greyLevel := 232 + int(opacity*18)
+		headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel)))
+		header = lipgloss.PlaceHorizontal(width, lipgloss.Center, headerStyle.Render(headerText))
+	}
 
-	// Help text
+	// Help text (fades with distraction-free mode)
 	helpText := "SPACE pause │ r restart │ j/k speed │ h/l paragraph │ 1-9 presets │ g goto │ c caps │ s save │ ESC back │ q quit"
+	var renderedHelpText string
+	if opacity >= 0.9 {
+		renderedHelpText = r.styles.Help.Render(helpText)
+	} else if opacity <= 0.05 {
+		// Nearly invisible
+		helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("232"))
+		renderedHelpText = helpStyle.Render(helpText)
+	} else {
+		// Greyscale: 232 (dark) to 240 (medium-dark grey for help)
+		greyLevel := 232 + int(opacity*8)
+		helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel)))
+		renderedHelpText = helpStyle.Render(helpText)
+	}
 
-	// Kartoza branding with proper colors
+	// Kartoza branding with proper colors - ALWAYS VISIBLE (ads stay visible per requirement)
 	kartozaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
 	heartStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourKartozaOrange))
 	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ColourCheetahGold))
@@ -366,7 +435,7 @@ func (r *Renderer) renderFullScreen(content, title string, width, height int) st
 		linkStyle.Render("GitHub")
 
 	footer := lipgloss.JoinVertical(lipgloss.Center,
-		r.styles.Help.Render(helpText),
+		renderedHelpText,
 		kartozaLine,
 	)
 	footer = lipgloss.PlaceHorizontal(width, lipgloss.Center, footer)
@@ -436,14 +505,14 @@ func (r *Renderer) RenderResumeList(sessions []backend.SavedSession, cursor int,
 
 	content := strings.Join(lines, "\n")
 
-	return r.renderFullScreen(content, "", width, height)
+	return r.renderFullScreen(content, "", width, height, 1.0)
 }
 
 // RenderLoading renders a loading screen
 func (r *Renderer) RenderLoading(width, height int) string {
 	loadingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
 	content := loadingStyle.Render("Loading document...")
-	return r.renderFullScreen(content, "", width, height)
+	return r.renderFullScreen(content, "", width, height, 1.0)
 }
 
 // RenderError renders an error screen
@@ -456,7 +525,7 @@ func (r *Renderer) RenderError(errMsg string, width, height int) string {
 		"",
 		r.styles.Help.Render("Press ESC to go back"),
 	)
-	return r.renderFullScreen(content, "", width, height)
+	return r.renderFullScreen(content, "", width, height, 1.0)
 }
 
 // RenderSettings renders the settings screen
@@ -469,7 +538,7 @@ func (r *Renderer) RenderSettings(cursor int, width, height int) string {
 		"",
 		r.styles.Help.Render("Press ESC to go back"),
 	)
-	return r.renderFullScreen(content, "", width, height)
+	return r.renderFullScreen(content, "", width, height, 1.0)
 }
 
 // RenderGotoOverlay renders the go-to percentage input overlay
@@ -532,4 +601,48 @@ func (r *Renderer) RenderGotoOverlay(gotoInput string, totalWords int) string {
 // parseFloat is a helper that wraps strconv.ParseFloat
 func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
+}
+
+// applyOpacity applies opacity to rendered text by making it fade to black
+// opacity: 1.0 = fully visible, 0.0 = hidden (rendered as nearly black)
+func applyOpacity(text string, opacity float64) string {
+	if opacity >= 1.0 {
+		return text
+	}
+	if opacity <= 0.05 {
+		// Nearly invisible - return empty string
+		return ""
+	}
+
+	// Use 256-color greyscale range: 232 (near-black) to 255 (white)
+	// opacity 0 → 232 (darkest), opacity 1 → 255 (lightest)
+	greyLevel := 232 + int(opacity*23)
+	if greyLevel < 232 {
+		greyLevel = 232
+	}
+	if greyLevel > 255 {
+		greyLevel = 255
+	}
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("%d", greyLevel)))
+	return dimStyle.Render(stripAnsi(text))
+}
+
+// stripAnsi removes ANSI escape codes from a string
+func stripAnsi(s string) string {
+	var result strings.Builder
+	inEscape := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteRune(r)
+	}
+	return result.String()
 }

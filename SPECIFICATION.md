@@ -2,7 +2,7 @@
 
 ## Technical Specification
 
-Version: 0.1.0
+Version: 0.2.0
 
 ---
 
@@ -118,6 +118,9 @@ RSVP is a speed reading technique where:
 **US-027: Go-to percentage**
 > As a user, I want to press 'g' and enter a percentage to jump directly to that position in the document.
 
+**US-028: Distraction-free mode**
+> As a user, when I am actively reading (play mode), I want all UI elements except the current word to gradually fade away after a few seconds of keyboard inactivity, so I can focus entirely on the reading content without visual distractions. Pressing any key should instantly restore all UI elements, which will then start fading again if no further keyboard activity occurs.
+
 ### 3.4 Persistence
 
 **US-030: Auto-save position**
@@ -183,7 +186,18 @@ RSVP is a speed reading technique where:
 | FR-036 | System SHALL provide toggle for all caps display (default: enabled) |
 | FR-037 | System SHALL persist all caps preference in settings |
 
-### 4.5 TUI Controls
+### 4.5 Distraction-Free Mode
+
+| ID | Requirement |
+|----|-------------|
+| FR-040 | System SHALL start fading non-essential UI elements after 2 seconds of keyboard inactivity during play mode |
+| FR-041 | System SHALL complete the fade-out animation over 3 seconds |
+| FR-042 | System SHALL instantly restore all UI elements to full visibility on any key press |
+| FR-043 | System SHALL keep the current word (block letters) fully visible at all times |
+| FR-044 | System SHALL keep the Kartoza branding visible even when other elements have faded |
+| FR-045 | System SHALL only activate distraction-free fading during active playback (not when paused) |
+
+### 4.6 TUI Controls
 
 | Key | Action |
 |-----|--------|
@@ -351,15 +365,15 @@ POST /api/v1/saved/{hash}/resume
 
 ### 6.2 Layout Zones
 
-| Zone | Content |
-|------|---------|
-| Header | App icon, document title, word count |
-| Previous | Faded previous word |
-| Current | Large block letters with original text |
-| Next | Upcoming 3 words with decreasing opacity |
-| Progress | Gradient progress bar with percentage |
-| Status | Play/pause, WPM, paragraph position |
-| Footer | Key bindings, Kartoza branding |
+| Zone | Content | Distraction-Free Behavior |
+|------|---------|---------------------------|
+| Header | App icon, document title, word count | Fades to invisible |
+| Previous | Faded previous word | Fades to invisible |
+| Current | Large block letters with original text | Always visible |
+| Next | Upcoming 3 words with decreasing opacity | Fades to invisible |
+| Progress | Gradient progress bar with percentage | Fades to invisible |
+| Status | Play/pause, WPM, paragraph position | Fades to invisible |
+| Footer | Key bindings, Kartoza branding | Help fades, branding stays visible |
 
 ---
 
@@ -443,6 +457,13 @@ POST /api/v1/saved/{hash}/resume
 ---
 
 ## 10. Changelog
+
+### Version 0.2.0 (Current)
+
+- **Distraction-free mode**: UI elements (header, progress indicator, previous/next words, status line, help text) gradually fade away during active reading after 2 seconds of keyboard inactivity
+- Current word block letters remain fully visible for uninterrupted reading focus
+- Kartoza branding remains visible (for web UI ad display)
+- Any key press instantly restores all UI elements
 
 ### Version 0.1.0 (Initial Release)
 

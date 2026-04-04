@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/harmonica v0.2.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/ledongthuc/pdf v0.0.0-20240201131950-da5b75280b06
-	github.com/timlinux/blockfont v0.0.0-20260315095935-dffde43761d3
+	github.com/timlinux/blockfont v0.1.1
 )
 
 require (
