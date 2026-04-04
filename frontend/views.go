@@ -102,8 +102,13 @@ func (r *Renderer) RenderReadingScreen(state *backend.ReadingState, animator *Wo
 	// Check if all caps display is enabled
 	allCapsEnabled := settings.IsAllCapsEnabled()
 
-	// Convert to lowercase for block font rendering (block font only supports lowercase)
-	displayWord := strings.ToLower(currentWord)
+	// Convert to uppercase or lowercase for block font rendering based on caps setting
+	var displayWord string
+	if allCapsEnabled {
+		displayWord = strings.ToUpper(currentWord)
+	} else {
+		displayWord = strings.ToLower(currentWord)
+	}
 
 	// Render current word using custom block font
 	letterLines := blockfont.RenderWord(displayWord)
