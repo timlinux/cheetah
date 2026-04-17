@@ -28,6 +28,15 @@ hugo/resources/
 *.swo
 *~
 
+# Xcode / iOS
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcworkspace/xcuserdata/
+ios/DerivedData/
+ios/*.xcarchive
+ios/build/
+*.xcuserstate
+*.xccheckout
+
 # OS
 .DS_Store
 Thumbs.db
